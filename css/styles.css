@@ -1,0 +1,413 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #333;
+    margin: 0;
+}
+
+/* Fullscreen styles */
+body:-webkit-full-screen {
+    width: 100%;
+    height: 100%;
+}
+
+body:-moz-full-screen {
+    width: 100%;
+    height: 100%;
+}
+
+body:-ms-fullscreen {
+    width: 100%;
+    height: 100%;
+}
+
+body:fullscreen {
+    width: 100%;
+    height: 100%;
+}
+
+.container {
+    max-width: 100%; /* הגדלת רוחב מקסימלי */
+    width: 95vw; /* שימוש ברוחב מסך */
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+/* בmullscreen הקונטיינר תופס את כל המסך */
+:-webkit-full-screen .container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-width: none;
+}
+
+:-moz-full-screen .container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-width: none;
+}
+
+:-ms-fullscreen .container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-width: none;
+}
+
+:fullscreen .container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-width: none;
+}
+
+header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    text-align: center;
+}
+
+header h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+main {
+    padding: 20px; /* הקטנת padding */
+}
+
+/* Screen Management */
+.screen {
+    display: none;
+}
+
+.screen.active {
+    display: block;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Welcome Screen */
+.welcome-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.welcome-content h2 {
+    color: #667eea;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.instructions-box {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 30px;
+    border: 2px solid #e9ecef;
+}
+
+.instructions-box h3 {
+    color: #495057;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+.instructions-box ul {
+    list-style: none;
+    margin-bottom: 25px;
+}
+
+.instructions-box li {
+    padding: 12px 0;
+    padding-right: 30px;
+    position: relative;
+    font-size: 1.05em;
+    color: #495057;
+}
+
+.instructions-box li:before {
+    content: "✓";
+    position: absolute;
+    right: 0;
+    color: #667eea;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.scoring-info {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    border-right: 4px solid #667eea;
+}
+
+.scoring-info h4 {
+    color: #667eea;
+    margin-bottom: 10px;
+}
+
+.scoring-info p {
+    margin: 8px 0;
+    color: #495057;
+}
+
+.scoring-info .example {
+    background: #e7f3ff;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 15px;
+    font-weight: 600;
+    color: #0066cc;
+}
+
+/* Buttons */
+.btn {
+    padding: 15px 40px;
+    font-size: 1.2em;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-secondary {
+    background: white;
+    color: #667eea;
+    border: 2px solid #667eea;
+}
+
+.btn-secondary:hover {
+    background: #667eea;
+    color: white;
+}
+
+/* Test Screen */
+.test-header {
+    margin-bottom: 20px;
+}
+
+.stats-bar {
+    display: flex;
+    justify-content: space-around;
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 15px;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    text-align: center;
+    flex: 1;
+    min-width: 150px;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.8em;
+    font-weight: 700;
+    color: #495057;
+}
+
+.stat-item.highlight .stat-value {
+    color: #667eea;
+    font-size: 2em;
+}
+
+/* Canvas */
+.canvas-container {
+    position: relative;
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    overflow: hidden; /* מונע גלילה */
+    min-height: 500px;
+}
+
+#test-canvas {
+    display: block;
+    border-radius: 10px;
+    background: white;
+    cursor: crosshair;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-width: 100%; /* התאמה לרוחב המסך */
+    height: auto; /* שמירה על יחס גובה-רוחב */
+    width: 100%; /* תופס את כל הרוחב */
+}
+
+.start-prompt {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(102, 126, 234, 0.95);
+    color: white;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 1.2em;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    animation: pulse 2s infinite;
+    pointer-events: none;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* Results Screen */
+.results-content {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.results-content h2 {
+    color: #667eea;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.final-score-box {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 40px;
+    border-radius: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.score-label {
+    font-size: 1.2em;
+    opacity: 0.9;
+    margin-bottom: 10px;
+}
+
+.final-score {
+    font-size: 5em;
+    font-weight: 700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.results-details {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 30px;
+}
+
+.result-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 0;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.result-item:last-child {
+    border-bottom: none;
+}
+
+.result-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.result-value {
+    font-weight: 700;
+    color: #667eea;
+    font-size: 1.1em;
+}
+
+.result-value.rating {
+    padding: 5px 15px;
+    border-radius: 20px;
+    background: #667eea;
+    color: white;
+}
+
+.results-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.results-actions .btn {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    header h1 {
+        font-size: 1.8em;
+    }
+    
+    main {
+        padding: 20px;
+    }
+    
+    .stats-bar {
+        flex-direction: column;
+    }
+    
+    .final-score {
+        font-size: 3.5em;
+    }
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מבחן תיאום עין-יד</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>מבחן תיאום עין-יד</h1>
+            <p class="subtitle">בדיקת קואורדינציה בין העין לעכבר</p>
+        </header>
+        
+        <main>
+            <section id="welcome-screen" class="screen active">
+                <div class="welcome-content">
+                    <h2>ברוכים הבאים למבחן</h2>
+                    <div class="instructions-box">
+                        <h3>הוראות המבחן:</h3>
+                        <ul>
+                            <li>לחץ והחזק את לחצן העכבר השמאלי בנקודת ההתחלה</li>
+                            <li>עקוב אחרי המסלול הצר בזהירות</li>
+                            <li>אל תגע בקירות המסלול (האזור האפור)</li>
+                            <li>אל תרים את העכבר במהלך המבחן</li>
+                            <li>יש לך 30 שניות להגיע כמה שיותר רחוק</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>הציון מתחיל מאחוז המסלול שהושלם (0-100)</p>
+                            <p>כל נגיעה בקיר או הרמת עכבר מורידה נקודה אחת</p>
+                            <p class="example">דוגמה: 85% מסלול - 5 טעויות = ציון סופי 80</p>
+                        </div>
+                    </div>
+                    <button id="start-button" class="btn btn-primary">התחל מבחן</button>
+                </div>
+            </section>
+
+            <section id="test-screen" class="screen">
+                <div class="test-header">
+                    <div class="stats-bar">
+                        <div class="stat-item">
+                            <span class="stat-label">זמן נותר:</span>
+                            <span id="timer" class="stat-value">30.0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">התקדמות:</span>
+                            <span id="progress" class="stat-value">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">טעויות:</span>
+                            <span id="penalties" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item highlight">
+                            <span class="stat-label">ציון נוכחי:</span>
+                            <span id="current-score" class="stat-value">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="canvas-container">
+                    <canvas id="test-canvas"></canvas>
+                    <div id="start-prompt" class="start-prompt">
+                        לחץ על נקודת ההתחלה הירוקה כדי להתחיל
+                    </div>
+                </div>
+            </section>
+
+            <section id="results-screen" class="screen">
+                <div class="results-content">
+                    <h2>תוצאות המבחן</h2>
+                    <div class="final-score-box">
+                        <div class="score-label">ציון סופי</div>
+                        <div id="final-score" class="final-score">0</div>
+                    </div>
+                    
+                    <div class="results-details">
+                        <div class="result-item">
+                            <span class="result-label">אחוז מסלול שהושלם:</span>
+                            <span id="result-progress" class="result-value">0%</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">מספר טעויות:</span>
+                            <span id="result-penalties" class="result-value">0</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">זמן שנוצל:</span>
+                            <span id="result-time" class="result-value">0 שניות</span>
+                        </div>
+                        <div class="result-item">
+                            <span class="result-label">דירוג:</span>
+                            <span id="result-rating" class="result-value rating">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="results-actions">
+                        <button id="retry-button" class="btn btn-primary">נסה שוב</button>
+                        <button id="new-path-button" class="btn btn-secondary">מסלול חדש</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="js/app.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
