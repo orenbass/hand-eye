@@ -3,17 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>מבחן תיאום עין-יד</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=2.0">
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-overlay">
+        <div class="login-container">
+            <h1>מערכת מבחן תיאום עין-יד</h1>
+            <div class="login-box">
+                <h2>כניסה למערכת</h2>
+                <p class="login-subtitle">אנא הזן תעודת זהות להמשך</p>
+                <input type="text" id="id-input" placeholder="תעודת זהות" maxlength="9" autocomplete="off">
+                <button id="login-button" class="btn btn-primary">כניסה</button>
+                <p id="login-error" class="login-error" style="display:none">תעודת זהות לא תקינה</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Test Complete Modal -->
+    <div id="test-complete-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+            <h2>✓ מבחן הושלם בהצלחה!</h2>
+            <p id="modal-test-name" class="modal-test-name"></p>
+            <div class="modal-score">
+                <span class="modal-score-label">ציון:</span>
+                <span id="modal-score-value" class="modal-score-value">-</span>
+            </div>
+            <button id="next-test-button" class="btn btn-primary">המשך למבחן הבא</button>
+            <button id="finish-all-button" class="btn btn-secondary" style="display:none">סיים את כל המבחנים</button>
+        </div>
+    </div>
+
     <div class="container">
         <header>
+            <div class="header-actions">
+                <button id="theme-toggle" type="button" title="מצב כהה / בהיר">🌙</button>
+                <button id="admin-button" type="button" title="הגדרות מנהל" style="display:none">⚙</button>
+                <button id="logout-button" type="button" title="יציאה מהמערכת">🚪</button>
+            </div>
             <h1>מבחן תיאום עין-יד</h1>
             <p class="subtitle">בדיקת קואורדינציה בין העין לעכבר</p>
+            <div id="test-selector" class="test-selector">
+                <button class="nav-btn" data-test="eyehand" data-order="1">תיאום עין-יד</button>
+                <button class="nav-btn" data-test="reaction" data-order="2" disabled>זמן תגובה</button>
+                <button class="nav-btn" data-test="memory" data-order="3" disabled>זיכרון מרחבי</button>
+                <button class="nav-btn" data-test="tracking" data-order="4" disabled>מעקב ודיוור קשב</button>
+                <button class="nav-btn" data-test="pathnav" data-order="5" disabled>ניווט נתיב</button>
+                <button class="nav-btn" data-test="northfind" data-order="6" disabled>מציאת הצפון</button>
+                <button class="nav-btn" data-test="flightcontrol" data-order="7" disabled>בקרת טיסה</button>
+                <button class="nav-btn" data-test="targetid" data-order="8" disabled>ירי במטרות</button>
+            </div>
         </header>
         
         <main>
+            <!-- Welcome Screen -->
             <section id="welcome-screen" class="screen active">
                 <div class="welcome-content">
                     <h2>ברוכים הבאים למבחן</h2>
@@ -37,7 +84,10 @@
                 </div>
             </section>
 
+            <!-- Eye-Hand Test Screen -->
             <section id="test-screen" class="screen">
+                <button class="instructions-toggle-btn" data-screen="test-screen">📖 הוראות</button>
+                
                 <div class="test-header">
                     <div class="stats-bar">
                         <div class="stat-item">
@@ -59,10 +109,331 @@
                     </div>
                 </div>
                 
-                <div class="canvas-container">
+                <div class="canvas-container" style="position:relative;display:flex;flex-direction:row;gap:24px;align-items:flex-start;">
                     <canvas id="test-canvas"></canvas>
+                    <!-- טיימר חיצוני גדול -->
+                    <div id="eyehand-external-timer" class="external-timer" style="min-width:110px;padding:14px 18px;border:2px solid #3b82f6;border-radius:14px;background:rgba(30,41,59,0.6);font:bold 28px system-ui;color:#fff;text-align:center;line-height:1.2;box-shadow:0 0 12px rgba(0,0,0,0.35);">
+                        30.0
+                        <div style="font-size:12px;font-weight:600;opacity:0.8;margin-top:4px">זמן</div>
+                    </div>
                     <div id="start-prompt" class="start-prompt">
                         לחץ על נקודת ההתחלה הירוקה כדי להתחיל
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reaction Test Screen -->
+            <section id="reaction-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן זמן תגובה</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" והמתן לשינוי צבע</li>
+                            <li>ברגע שהמסך הופך לירוק - לחץ מיד!</li>
+                            <li>אל תלחץ לפני שהמסך ירוק (זינוק שווא)</li>
+                            <li>המבחן כולל 8 ניסיונות</li>
+                            <li>הציון מחושב על פי ממוצע זמן התגובה</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>ממוצע זמן תגובה + יציבות - קנסות על זינוקים שווא</p>
+                        </div>
+                        <button id="start-reaction-button" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div id="reaction-area" class="reaction-area">
+                            <div id="reaction-status">מוכן...</div>
+                        </div>
+                        <div id="reaction-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>ניסיון:</span>
+                                <span id="reaction-attempt">0/8</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>זמן אחרון:</span>
+                                <span id="reaction-last">-</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ממוצע:</span>
+                                <span id="reaction-avg">-</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>סטיית תקן:</span>
+                                <span id="reaction-std">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Memory Test Screen -->
+            <section id="memory-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן זיכרון מרחבי</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" לצפייה ברצף תאים</li>
+                            <li>שים לב לסדר התאים שנדלקים</li>
+                            <li>לאחר הצגת הרצף - לחץ על התאים באותו סדר</li>
+                            <li>כל הצלחה מאריכה את הרצף</li>
+                            <li>טעות אחת מסיימת את המבחן</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>אורך הרצף המקסימלי שהצלחת לזכור</p>
+                        </div>
+                        <button id="start-memory-button" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div id="memory-grid" class="memory-grid"></div>
+                        <div id="memory-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>אורך רצף נוכחי:</span>
+                                <span id="memory-length">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>אורך מקסימלי:</span>
+                                <span id="memory-max">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tracking Test Screen -->
+            <section id="tracking-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן מעקב ודיוור קשב</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" - עיגול נע יופיע</li>
+                            <li>שמור את סמן העכבר בתוך העיגול הנע</li>
+                            <li>העיגול זז באופן אקראי במהירות משתנה</li>
+                            <li>כל יציאה מהעיגול מורידה ציון</li>
+                            <li>נסה להישאר בתוך העיגול כמה שיותר זמן</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>אחוז הזמן בתוך העיגול - קנסות על יציאות</p>
+                        </div>
+                        <button id="start-tracking-button" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div class="unified-canvas-container">
+                            <canvas id="tracking-canvas" class="unified-canvas"></canvas>
+                        </div>
+                        <div id="tracking-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>זמן בתוך יעד:</span>
+                                <span id="tracking-in">0%</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>יציאות:</span>
+                                <span id="tracking-outs">0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ציון:</span>
+                                <span id="tracking-score">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Path Navigation Test Screen -->
+            <section id="pathnav-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן ניווט נתיב</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" לטעינת מסלול</li>
+                            <li>נווט מנקודת ההתחלה לנקודת הסיום</li>
+                            <li>השתדל להישאר קרוב לקו המנחה</li>
+                            <li>סטייה מהקו פוגעת בציון</li>
+                            <li>יש זמן מוגבל להשלמת המסלול</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>סטייה ממוצעת מהקו המנחה</p>
+                        </div>
+                        <button id="start-pathnav" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div class="unified-canvas-container">
+                            <canvas id="pathnav-canvas" class="unified-canvas"></canvas>
+                        </div>
+                        <div id="pathnav-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>זמן:</span>
+                                <span id="pathnav-time">00:00</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ציון:</span>
+                                <span id="pathnav-score">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- North Finding Test Screen -->
+            <section id="northfind-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן מציאת הצפון</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" - הסצנה תתחיל להסתובב</li>
+                            <li>בסיום הסיבוב - סמן את כיוון הצפון</li>
+                            <li>המבחן כולל מספר ניסיונות</li>
+                            <li>נסה להיות מדויק ככל האפשר</li>
+                            <li>אי בחירה בזמן = טעות מלאה</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>סטיית זווית ממוצעת מהצפון האמיתי</p>
+                        </div>
+                        <button id="start-northfind" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div class="unified-canvas-container">
+                            <canvas id="northfind-canvas" class="unified-canvas"></canvas>
+                        </div>
+                        <div id="northfind-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>ניסיון:</span>
+                                <span><span id="northfind-trial">0</span>/<span id="northfind-total">0</span></span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ממוצע סטייה:</span>
+                                <span id="northfind-avg">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Flight Control Test Screen -->
+            <section id="flightcontrol-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן בקרת טיסה</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" - הפרעות אקראיות יתחילו</li>
+                            <li>השתמש במקשי החיצים לשמירה על המרכז</li>
+                            <li>המטרה היא להישאר קרוב למרכז ככל האפשר</li>
+                            <li>ההפרעות משתנות באופן אקראי</li>
+                            <li>משך המבחן מוגדר מראש</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>מרחק ממוצע הפוך מהמרכז</p>
+                        </div>
+                        <button id="start-flightcontrol" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div class="unified-canvas-container">
+                            <canvas id="flightcontrol-canvas" class="unified-canvas"></canvas>
+                        </div>
+                        <div id="flightcontrol-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>זמן:</span>
+                                <span id="flightcontrol-time">00:00</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ציון:</span>
+                                <span id="flightcontrol-score">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Target ID Test Screen -->
+            <section id="targetid-screen" class="screen">
+                <div class="instructions-view">
+                    <div class="instructions-box">
+                        <h3>מבחן ירי במטרות</h3>
+                        <ul>
+                            <li>לחץ על "התחל מבחן" - מטרות יופיעו</li>
+                            <li>פגע במטרות הירוקות בלבד</li>
+                            <li>הימנע מפגיעה במטרות האדומות</li>
+                            <li>דיוק = פגיעות טובות / כל הלחיצות</li>
+                            <li>קצב ומהירות תלויים ברמת הקושי</li>
+                        </ul>
+                        <div class="scoring-info">
+                            <h4>חישוב הציון:</h4>
+                            <p>דיוק לאחר הפחתות טעויות</p>
+                        </div>
+                        <button id="start-targetid" class="btn btn-primary start-test-btn">התחל מבחן</button>
+                    </div>
+                </div>
+
+                <div class="test-view" style="display:none">
+                    <button class="instructions-toggle-btn">📖 הוראות</button>
+                    <div class="test-area">
+                        <div class="unified-canvas-container">
+                            <canvas id="targetid-canvas" class="unified-canvas"></canvas>
+                        </div>
+                        <div id="targetid-stats" class="test-stats" style="display:none">
+                            <div class="stat-row">
+                                <span>זמן:</span>
+                                <span id="targetid-time">00:00</span>
+                            </div>
+                            <div class="stat-row">
+                                <span>ציון:</span>
+                                <span id="targetid-score">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="admin-screen" class="screen">
+                <div class="admin-panel">
+                    <h2>הגדרות מנהל</h2>
+                    <div id="admin-lock" class="locked-msg" style="display:none">נדרש סיסמה לפתיחה</div>
+                    <div class="admin-grid" id="admin-settings" style="display:none">
+                        <div class="admin-box">
+                            <h3>כללי</h3>
+                            <label>מזהה נבחן</label>
+                            <input id="cfgCandidate" type="text" maxlength="16" placeholder="מספר מזהה">
+                            <label style="margin-top:8px">סקאלת ציון גלובלית</label>
+                            <div style="display:flex;gap:6px">
+                                <input id="cfgScaleMin" type="number" min="1" max="99" value="1">
+                                <input id="cfgScaleMax" type="number" min="2" max="100" value="7">
+                            </div>
+                            <p style="font-size:12px;color:#94a3b8;margin-top:6px">הסקאלה תחול על כל המבחנים</p>
+                        </div>
+                        <div class="admin-box" style="flex:2">
+                            <h3>מבחנים</h3>
+                            <div class="admin-tests-list" id="testsConfig"></div>
+                            <button id="saveSettings" class="save-settings-btn" style="margin-top:10px">שמור הגדרות</button>
+                            <p style="font-size:12px;color:#94a3b8;margin-top:4px">שינויים ייכנסו לתוקף בתחילת מבחן הבא</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -103,7 +474,18 @@
         </main>
     </div>
     
-    <script src="js/app.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/auth.js?v=2.0"></script>
+    <script src="js/settings.js?v=2.0"></script>
+    <script src="js/instructions.js?v=2.0"></script>
+    <script src="js/eyehand.js?v=2.0"></script>
+    <script src="js/navigation.js?v=2.0"></script>
+    <script src="js/reaction.js?v=2.0"></script>
+    <script src="js/memory.js?v=2.0"></script>
+    <script src="js/tracking.js?v=2.0"></script>
+    <script src="js/test-pathnav.js?v=2.0"></script>
+    <script src="js/test-northfind.js?v=2.0"></script>
+    <script src="js/test-flightcontrol.js?v=2.0"></script>
+    <script src="js/test-targetid.js?v=2.0"></script>
+    <script src="js/theme.js?v=2.0"></script>
 </body>
 </html>
