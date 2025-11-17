@@ -1,14 +1,37 @@
 // Authentication and Authorization Module
 (function(){
-    const ADMIN_IDS = ['123456789', '111111111', 'admin']; // תעודות זהות של מנהלים
+    const ADMIN_IDS = ['200419174', 'ronmalkin']; // תעודות זהות של מנהלים
     
     let currentUser = null;
     let isAdmin = false;
     let completedTests = new Set();
     let testScores = []; // {id, score}
     
-    const testOrder = ['eyehand', 'reaction', 'memory', 'tracking', 'pathnav', 'northfind', 'flightcontrol', 'targetid'];
-    
+    let testOrder = []; // סדר דינמי ייקבע מההגדרות
+
+    function getSettingsObject(){
+        if(window.appSettings && Array.isArray(window.appSettings.tests)) return window.appSettings;
+        try { const raw = localStorage.getItem('app.settings.v1'); if(raw){ const obj = JSON.parse(raw); if(obj && Array.isArray(obj.tests)) return obj; } } catch(e) {}
+        return null;
+    }
+    function refreshTestOrder(){
+        const s = getSettingsObject();
+        if(s){
+            testOrder = s.tests.filter(t=>t.include).map(t=>t.id);
+        } else {
+            // fallback אם אין הגדרות עדיין
+            testOrder = [];
+        }
+        console.log('[auth] testOrder refreshed', testOrder);
+    }
+    function selectFirstAvailable(){
+        refreshTestOrder();
+        const first = testOrder[0];
+        if(!isAdmin && first){
+            if(window.switchTest) window.switchTest(first);
+        }
+    }
+
     function validateID(id) {
         // בדיקה בסיסית - לפחות 6 תווים
         return id && id.length >= 6;
@@ -33,6 +56,8 @@
         localStorage.setItem('currentUser', currentUser);
         localStorage.setItem('isAdmin', isAdmin ? 'true' : 'false');
         localStorage.setItem('completedTests', JSON.stringify([]));
+        
+        refreshTestOrder();
         
         return true;
     }
@@ -61,29 +86,31 @@
     }
     
     function updateTestButtons() {
-        const buttons = document.querySelectorAll('.nav-btn');
-        
+        refreshTestOrder();
+        const buttons = document.querySelectorAll('#test-selector .nav-btn');
+        // הסתרת כפתורים שאינם בסדר הנוכחי (אולי נשארו ישנים)
+        buttons.forEach(btn=>{ if(!testOrder.includes(btn.dataset.test)) btn.style.display='none'; else btn.style.display=''; });
         if (isAdmin) {
-            // מנהל - כל הכפתורים פעילים
-            buttons.forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('locked');
-            });
-            
-            // הצג כפתור הגדרות
-            const adminBtn = document.getElementById('admin-button');
-            if (adminBtn) adminBtn.style.display = 'block';
-        } else {
-            // highest completed index
-            let highest = -1; completedTests.forEach(t=>{ const idx=testOrder.indexOf(t); if(idx>highest) highest=idx; });
-            buttons.forEach(btn => {
-                const testName = btn.dataset.test; const testIndex = testOrder.indexOf(testName);
-                // disable any test already completed or before highest completed
-                if (testIndex <= highest) { btn.disabled = true; btn.classList.add('locked'); return; }
-                // unlock only next test after highest
-                if (testIndex === highest + 1) { btn.disabled = false; btn.classList.remove('locked'); }
-                else { btn.disabled = true; btn.classList.add('locked'); }
-            });
+            buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('locked'); });
+            const adminBtn = document.getElementById('admin-button'); if (adminBtn) adminBtn.style.display = 'block';
+            return;
+        }
+        let highest = -1; completedTests.forEach(t=>{ const idx=testOrder.indexOf((t||'').trim()); if(idx>highest) highest=idx; });
+        console.log('[auth] completedTests=', [...completedTests], 'highestIdx=', highest, 'order=', testOrder);
+        buttons.forEach(btn => {
+            const testName = (btn.dataset.test||'').trim();
+            const testIndex = testOrder.indexOf(testName);
+            if (testIndex === -1) { btn.disabled = true; btn.classList.add('locked'); return; }
+            if (testIndex <= highest) { btn.disabled = true; btn.classList.add('locked'); return; }
+            if (testIndex === highest + 1) { btn.disabled = false; btn.classList.remove('locked'); return; }
+            btn.disabled = true; btn.classList.add('locked');
+        });
+        // ביטחון נוסף: ודא שהמבחן הבא אחרי האחרון שהושלם פתוח
+        const nextIdx = highest + 1;
+        if (nextIdx >= 0 && nextIdx < testOrder.length) {
+            const nextName = testOrder[nextIdx];
+            const nb = document.querySelector(`.nav-btn[data-test="${nextName}"]`);
+            if (nb) { nb.disabled = false; nb.classList.remove('locked'); }
         }
     }
     
@@ -122,10 +149,12 @@
             'reaction': 'זמן תגובה',
             'memory': 'זיכרון מרחבי',
             'tracking': 'מעקב ודיוור קשב',
-            'pathnav': 'ניווט נתיב',
+            // 'pathnav': 'ניווט נתיב', הוסר
             'northfind': 'מציאת הצפון',
             'flightcontrol': 'בקרת טיסה',
-            'targetid': 'ירי במטרות'
+            'targetid': 'ירי במטרות',
+            'orientation': 'התמצאות וכיוונים',
+            'flightexam': 'מבחן הטסה'
         };
         
         testNameEl.textContent = testNames[testName] || testName;
@@ -179,6 +208,7 @@
                 updateTestButtons();
                 hideUserStatsIfNeeded();
                 applyBodyMode();
+                if(!isAdmin) selectFirstAvailable();
             } else {
                 errorMsg.style.display = 'block';
                 errorMsg.textContent = 'תעודת זהות חייבת להכיל לפחות 6 תווים';
@@ -202,7 +232,10 @@
         
         logoutButton.addEventListener('click', () => {
             if (confirm('האם אתה בטוח שברצונך לצאת מהמערכת?')) {
-                logout(); showLoginScreen(); const navButtons = document.querySelectorAll('.nav-btn'); navButtons.forEach(btn => { if (btn.dataset.test !== 'eyehand') { btn.disabled = true; btn.classList.add('locked'); } }); if (window.switchTest) { window.switchTest('eyehand'); } applyBodyMode(); hideUserStatsIfNeeded();
+                logout(); showLoginScreen();
+                // במקום לכפות eyehand – מנקה מצבים
+                const navButtons = document.querySelectorAll('.nav-btn'); navButtons.forEach(btn => { btn.disabled = true; btn.classList.add('locked'); });
+                applyBodyMode(); hideUserStatsIfNeeded();
             }
         });
     }
@@ -233,7 +266,9 @@
         const savedScores = localStorage.getItem('testScores'); if(savedScores){ try{ testScores = JSON.parse(savedScores)||[]; }catch(e){ testScores=[]; } }
         
         if (savedUser) {
-            currentUser = savedUser; isAdmin = savedAdmin; if (savedCompleted) { completedTests = new Set(JSON.parse(savedCompleted)); } hideLoginScreen(); updateTestButtons(); hideUserStatsIfNeeded(); applyBodyMode();
+            currentUser = savedUser; isAdmin = savedAdmin; if (savedCompleted) { completedTests = new Set(JSON.parse(savedCompleted)); }
+            hideLoginScreen(); refreshTestOrder(); updateTestButtons(); hideUserStatsIfNeeded(); applyBodyMode();
+            if(!isAdmin) selectFirstAvailable();
         } else { showLoginScreen(); }
         
         setupLoginForm();
@@ -250,8 +285,13 @@
         getNextTest,
         hasCompleted: (test)=> completedTests.has(test),
         getScores: () => testScores.slice(),
-        downloadScores: downloadScoresFile
+        downloadScores: downloadScoresFile,
+        forceRefreshNav: updateTestButtons
     };
     
     document.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('settings-updated', ()=>{
+        // כל שינוי בהגדרות מעדכן סדר מבחנים ונעילות
+        refreshTestOrder(); updateTestButtons(); if(!isAdmin) selectFirstAvailable();
+    });
 })();

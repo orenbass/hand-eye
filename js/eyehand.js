@@ -72,12 +72,8 @@ class EyeHandTest {
       if (sp) sp.style.display = 'none';
     }, 100);
     window.addEventListener('resize', () => {
-      if (this.testActive || !this.canvas) return;
-      const size = Math.floor(window.innerHeight * 0.8);
-      this.canvas.width = size;
-      this.canvas.height = size;
-      this.canvas.style.width = size + 'px';
-      this.canvas.style.height = size + 'px';
+      if (!this.canvas) return;
+      if(window.setUnifiedCanvasSize) window.setUnifiedCanvasSize(this.canvas);
     });
   }
 
@@ -98,11 +94,10 @@ class EyeHandTest {
   setupCanvas() {
     this.canvas = document.getElementById('test-canvas');
     this.ctx = this.canvas.getContext('2d');
-    const size = Math.floor(window.innerHeight * 0.8);
-    this.canvas.width = size;
-    this.canvas.height = size;
-    this.canvas.style.width = size + 'px';
-    this.canvas.style.height = size + 'px';
+    if(window.setUnifiedCanvasSize){ window.setUnifiedCanvasSize(this.canvas); } else {
+      const size = Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.8);
+      this.canvas.width = size; this.canvas.height = size; this.canvas.style.width=size+'px'; this.canvas.style.height=size+'px';
+    }
     this.ctx.imageSmoothingEnabled = true;
     this.maskCanvas = document.createElement('canvas');
     this.maskCanvas.width = this.canvas.width;

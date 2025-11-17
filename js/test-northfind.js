@@ -8,6 +8,15 @@
   const statsBox=document.getElementById('northfind-stats');
   if(!btn||!canvas) return; const ctx=canvas.getContext('2d');
 
+  // --- טעינת תמונות מפה מתיקיית assets ---
+  const DEFAULT_MAP_IMAGES = [
+    'assets/images/northfind/North_snapshot_11-10-2025_22_59_45.jpeg',
+    'assets/images/northfind/North_snapshot_11-10-2025_23_00_07.jpeg',
+    'assets/images/northfind/North_snapshot_11-10-2025_23_03_24.jpeg',
+    'assets/images/northfind/North_snapshot_11-10-2025_23_03_38.jpeg',
+    'assets/images/northfind/North_snapshot_11-10-2025_23_04_05.jpeg'
+  ];
+
   // --- map generation (unchanged idea) ---
   function generateRandomMap(width=800,height=800,seed=0){
     const c=document.createElement('canvas'); c.width=width; c.height=height; const g=c.getContext('2d');
@@ -37,7 +46,15 @@
   function resize(){ const size=Math.floor(window.innerHeight*0.8); canvas.width=size; canvas.height=size; mapRadius=Math.min(canvas.width,canvas.height)*0.35; }
   resize(); window.addEventListener('resize',()=> phase!=='idle' && resize());
 
-  function cfg(){ const c=window.getNorthConfig? window.getNorthConfig():{}; trials=c.trials||5; learnSec=c.learnSec||10; spinSec=c.spinSec||10; answerSec=c.answerSec||10; mapImages=Array.isArray(c.mapImages)&&c.mapImages.length? c.mapImages: generateRandomMaps(trials); }
+  function cfg(){ 
+    const c=window.getNorthConfig? window.getNorthConfig():{}; 
+    trials=c.trials||5; 
+    learnSec=c.learnSec||10; 
+    spinSec=c.spinSec||10; 
+    answerSec=c.answerSec||10; 
+    // טעינת תמונות מתיקיית assets או מ-localStorage (fallback)
+    mapImages = Array.isArray(c.mapImages) && c.mapImages.length ? c.mapImages : DEFAULT_MAP_IMAGES;
+  }
 
   function angularError(a,b){ let d=Math.abs(a-b)%(Math.PI*2); if(d>Math.PI) d=(Math.PI*2)-d; return d; }
   function scoreFromError(err){ const deg=err*180/Math.PI, step=360/NUM_ARROWS; let ratio; if(deg<=step/2) ratio=1; else if(deg<=step*1.5) ratio=.85; else if(deg<=step*2.5) ratio=.7; else if(deg<=step*3.5) ratio=.55; else ratio=Math.max(0,1-deg/180)*.5; const g=window.getGlobalScale? window.getGlobalScale():{min:1,max:7}; return (g.min + ratio*(g.max-g.min)); }
