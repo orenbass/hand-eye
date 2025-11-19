@@ -1,4 +1,4 @@
-// Orientation Test - Simplified
+// Orientation Test - Simplified עם אינטגרציית Supabase + Preload תמונות
 (function(){
   const DIRECTIONS = {
     'N2S': 'מצפון לדרום',
@@ -7,16 +7,141 @@
     'W2E': 'ממערב למזרח'
   };
 
-  let orientationSets = []; // ייקלטו מההגדרות דרך window.loadOrientationSets
+  // נתונים מ-Supabase יישמרו כאן אחרי טעינה
+  let supabaseOrientationSets = null; // [{ test_number, topRow, orientationRows: [] }]
+  let supabaseLoading = false;
+  let supabaseLoadError = null;
+
+  // מצב טעינה מוקדמת
+  let preloadStatus = {}; // { index: { promise, topLoaded, viewLoaded } }
+
+  function showLoading(message){
+    const intro = document.getElementById('orientation-intro');
+    const test = document.getElementById('orientation-test');
+    const results = document.getElementById('orientation-results');
+    if(intro) intro.style.display = 'none';
+    if(results) results.style.display = 'none';
+    if(test){
+      test.style.display = 'block';
+      test.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:70vh;color:#fff;gap:28px;">
+          <div style="font-size:28px;font-weight:600;">${message}</div>
+          <div style="width:90px;height:90px;position:relative;">
+            <div style="position:absolute;inset:0;border-radius:50%;border:10px solid rgba(255,255,255,0.15);"></div>
+            <div class="orient-spinner" style="position:absolute;inset:0;border-radius:50%;border:10px solid #3b82f6;border-top-color:transparent;animation:spin 1s linear infinite;"></div>
+          </div>
+          <div id="orient-preload-progress" style="font-size:16px;color:#94a3b8;">0%</div>
+        </div>
+      `;
+      if(!document.getElementById('orient-preload-style')){
+        const st = document.createElement('style');
+        st.id = 'orient-preload-style';
+        st.textContent = `@keyframes spin {from {transform:rotate(0deg);} to {transform:rotate(360deg);} }`;
+        document.head.appendChild(st);
+      }
+    }
+  }
+
+  function preloadQuestion(idx){
+    if(preloadStatus[idx]) return preloadStatus[idx].promise; // כבר בתהליך / נטען
+    const q = questions[idx];
+    if(!q) return Promise.resolve();
+    let topLoaded = false, viewLoaded = false;
+    const p = new Promise(resolve => {
+      const topImg = new Image();
+      const viewImg = new Image();
+      q._topImgEl = topImg; // שמירה לשימוש עתידי אם נרצה
+      q._viewImgEl = viewImg;
+      function updateProgress(){
+        const progressEl = document.getElementById('orient-preload-progress');
+        if(progressEl){
+          const totalNeeded = 2;
+            let done = (topLoaded?1:0) + (viewLoaded?1:0);
+          progressEl.textContent = Math.round((done/totalNeeded)*100) + '%';
+        }
+        if(topLoaded && viewLoaded){ resolve(); }
+      }
+      topImg.onload = () => { topLoaded = true; updateProgress(); };
+      topImg.onerror = () => { topLoaded = true; console.warn('[orientation] top preload failed', q.topImage); updateProgress(); };
+      viewImg.onload = () => { viewLoaded = true; updateProgress(); };
+      viewImg.onerror = () => { viewLoaded = true; console.warn('[orientation] view preload failed', q.questionImage); updateProgress(); };
+      // התחלת טעינה
+      topImg.src = q.topImage;
+      viewImg.src = q.questionImage;
+    });
+    preloadStatus[idx] = { promise: p };
+    return p;
+  }
+
+  // טעינה מקדימה של מספר שאלות קדימה (כעת רק הבא)
+  function warmNext(idx){
+    const next = idx + 1;
+    if(next < questions.length){
+      preloadQuestion(next).catch(()=>{});
+    }
+  }
+
+  async function fetchOrientationFromSupabase(){
+    if(!window.supabaseClient){
+      supabaseLoadError = 'Supabase לא מאותחל';
+      return null;
+    }
+    if(supabaseOrientationSets) return supabaseOrientationSets; // כבר נטען
+    if(supabaseLoading) return null;
+    supabaseLoading = true;
+    try {
+      // שליפת כל הרשומות
+      const { data, error } = await window.supabaseClient
+        .from('orientation_images')
+        .select('*')
+        .order('test_number', { ascending: true });
+      if(error){
+        supabaseLoadError = error.message;
+        console.error('[orientation] DB error', error);
+        return null;
+      }
+      // קיבוץ לפי test_number
+      const byTest = new Map();
+      for(const row of data){
+        if(!byTest.has(row.test_number)) byTest.set(row.test_number, { test_number: row.test_number, topRow: null, orientationRows: [] });
+        const obj = byTest.get(row.test_number);
+        if(row.view_type === 'top') obj.topRow = row; else if(row.view_type === 'orientation') obj.orientationRows.push(row);
+      }
+      // סינון מבחנים שאין להם גם top וגם לפחות תמונת orientation אחת
+      const sets = Array.from(byTest.values()).filter(s => s.topRow && s.orientationRows.length);
+
+      // יצירת כתובות לתמונות: שימוש ב-public url במקום Signed (להימנע מ-400 במצב ללא הרשאות חתימה)
+      const bucketRef = window.supabaseClient.storage.from('orientation');
+      for(const set of sets){
+        const pubTop = bucketRef.getPublicUrl(set.topRow.storage_path);
+        if(pubTop && pubTop.data && pubTop.data.publicUrl){
+          set.topRow.signed_url = pubTop.data.publicUrl; // שימוש בשם השדה הקיים
+        }
+        for(const row of set.orientationRows){
+          const pubView = bucketRef.getPublicUrl(row.storage_path);
+          if(pubView && pubView.data && pubView.data.publicUrl){
+            row.signed_url = pubView.data.publicUrl;
+          }
+        }
+      }
+
+      supabaseOrientationSets = sets;
+      console.log('[orientation] Loaded sets from Supabase:', sets.length);
+      return sets;
+    } catch(e){
+      supabaseLoadError = e.message;
+      console.error('[orientation] Exception loading Supabase', e);
+      return null;
+    } finally {
+      supabaseLoading = false;
+    }
+  }
+
+  let orientationSets = []; // ייקלטו מההגדרות דרך window.loadOrientationSets (עדיין נשמר ל-Backward compatibility)
   window.loadOrientationSets = function(list){
     orientationSets = Array.isArray(list)? list.filter(s=>s && (s.topImage || (s.viewImages && s.viewImages.length))) : [];
-    console.log('[orientation] received sets', orientationSets.length);
+    console.log('[orientation] received sets (custom config)', orientationSets.length);
   };
-
-  const SETS = [
-    'תרגיל כיוונים 1', 'תרגיל כיוונים 2', 'תרגיל כיוונים 3', 'תרגיל כיוונים 4',
-    'תרגיל כיוונים 5', 'תרגיל כיוונים 6', 'תרגיל כיוונים 7', 'תרגיל כיוונים 8'
-  ];
 
   let currentSet = 0;
   let currentQuestion = 0;
@@ -38,19 +163,43 @@
     };
   }
 
-  function buildQuestions(){
+  // בניית השאלות: קודם ננסה Supabase, אם לא הצליח נשתמש בגרסה הישנה (assets)
+  async function buildQuestionsAsync(){
     const cfg = getConfig();
     const qs = [];
-    // אם קיימות קבוצות מההגדרות – השתמש בהן
+
+    // ניסיון טעינה מ-Supabase אם אין orientationSets חיצוני
+    if(!orientationSets.length){
+      const sets = await fetchOrientationFromSupabase();
+      if(sets && sets.length){
+        const shuffled = sets.slice().sort(()=>Math.random()-0.5);
+        for(const set of shuffled){
+          // בחירת תמונת orientation אחת רנדומלית
+          const row = set.orientationRows[Math.floor(Math.random() * set.orientationRows.length)];
+          if(!row || !row.code || !DIRECTIONS[row.code]) continue;
+          qs.push({
+            test_number: set.test_number,
+            setName: `מבחן ${set.test_number}`,
+            topImage: set.topRow.signed_url,
+            questionImage: row.signed_url,
+            correctAnswer: row.code
+          });
+          if(qs.length >= cfg.maxQuestions) break;
+        }
+        return qs;
+      }
+    }
+
+    // אם orientationSets חיצוני הועבר (Legacy) – שימוש בו
     if(orientationSets.length){
-      const shuffled = orientationSets.slice().sort(()=>Math.random()-0.5);
-      for(const set of shuffled){
+      const shuffled2 = orientationSets.slice().sort(()=>Math.random()-0.5);
+      for(const set of shuffled2){
         if(!set.viewImages || !set.viewImages.length) continue;
         const view = set.viewImages[Math.floor(Math.random()*set.viewImages.length)];
         if(!view || !view.orient || !DIRECTIONS[view.orient]) continue;
         qs.push({
           setName: set.name || 'קבוצה',
-            topImage: set.topImage || '',
+          topImage: set.topImage || '',
           questionImage: view.url,
           correctAnswer: view.orient
         });
@@ -58,7 +207,8 @@
       }
       return qs;
     }
-    // אחרת – ברירת מחדל מתיקיית assets כמו קודם
+
+    // נפילה חזרה לברירת מחדל מקומית (כמו קודם)
     for(let i = 1; i <= Math.min(8, cfg.maxQuestions); i++){
       const setNum = i;
       const setName = `תרגיל כיוונים ${setNum}`;
@@ -75,17 +225,31 @@
     return qs.slice(0, cfg.maxQuestions);
   }
 
-  function start(){
+  // החלפת start להיות אסינכרוני עם preload
+  async function start(){
     const cfg = getConfig();
-    questions = buildQuestions();
+    const startBtn = document.getElementById('start-orientation');
+    if(startBtn){ startBtn.disabled = true; }
+    showLoading('טוען תמונות לשאלה הראשונה...');
+    questions = await buildQuestionsAsync();
+    if(!questions.length){
+      alert('לא נמצאו תמונות למבחן');
+      if(startBtn){ startBtn.disabled = false; }
+      return;
+    }
+    // Preload של השאלה הראשונה (ממתינים להשלמה מלאה לפני התחלה)
+    try {
+      await preloadQuestion(0);
+    } catch(e){ console.warn('[orientation] preload error first question', e); }
+    // חימום השאלה הבאה ברקע
+    warmNext(0);
     results = [];
     currentQuestion = 0;
     stage = 'viewing-top';
     startTime = Date.now();
-    
     if(window.enterFullscreenMode) window.enterFullscreenMode();
-    
     showTopView();
+    if(startBtn){ startBtn.disabled = false; }
   }
 
   function showTopView(){
@@ -124,6 +288,9 @@
       stage = 'question';
       showQuestion();
     }, cfg.displayTimeSec * 1000);
+
+    // חימום השאלה הבאה
+    warmNext(currentQuestion);
   }
 
   function isAdmin(){ return window.testAuth && window.testAuth.isAdmin && window.testAuth.isAdmin(); }
@@ -164,6 +331,9 @@
       btn.addEventListener('mouseenter', function(){ this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 20px rgba(102,126,234,0.4)'; });
       btn.addEventListener('mouseleave', function(){ this.style.transform='scale(1)'; this.style.boxShadow='none'; });
     });
+
+    // חימום השאלה הבאה
+    warmNext(currentQuestion);
   }
 
   function openTopImageModal(topImageUrl){
@@ -318,9 +488,9 @@
     console.log('[orientation] Test completed', {total, correct, percent, score});
   }
 
-  // Event listeners
-  const startBtn = document.getElementById('start-orientation');
-  if(startBtn) startBtn.addEventListener('click', start);
-  
-  console.log('[orientation] Module loaded - simplified version');
+  // החלפת מאזין הכפתור לגרסה החדשה האסינכרונית
+  const startBtnEl = document.getElementById('start-orientation');
+  if(startBtnEl) startBtnEl.addEventListener('click', start);
+
+  console.log('[orientation] Module loaded - Supabase integrated version + Preload');
 })();

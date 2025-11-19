@@ -8,6 +8,13 @@
     <meta http-equiv="Expires" content="0">
     <title>מבחנים חת"מ</title>
     <link rel="stylesheet" href="css/styles.css?v=2.0">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+      // אתחול Supabase – החלף בערכים שלך
+      window.supabaseClient = supabase.createClient('https://dgqmkrbrxdmltptuzwhq.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRncW1rcmJyeGRtbHRwdHV6d2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NDcyNzcsImV4cCI6MjA3OTEyMzI3N30.kH9eoHWj-zfts6OxKLXnRFTZZahS4ai_ApyXC8ina2A');
+    </script>
+    <!-- הוספת סקריפט סינכרון התמצאות -->
+    <script src="js/orientation-sync.js?v=1.0"></script>
 </head>
 <body>
     <!-- Login Screen -->
@@ -596,6 +603,8 @@
     </div>
     
     <script src="js/auth.js?v=2.0"></script>
+    <script src="js/orientation-sync.js?v=1.0"></script>
+    <script src="js/flight-exam-sync.js?v=1.0"></script>
     <script src="js/settings.js?v=2.0"></script>
     <script src="js/instructions.js?v=2.0"></script>
     <script src="js/eyehand.js?v=2.0"></script>
@@ -611,4 +620,3 @@
     <script src="js/theme.js?v=2.0"></script>
 </body>
 </html>
-``` 

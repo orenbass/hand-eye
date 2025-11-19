@@ -86,11 +86,97 @@
   resize();
   window.addEventListener('resize', ()=> active && resize());
 
+  // === Preload Support ===
+  let preloads = {}; // { index: { promise, pathImgObj, testImgObj } }
+  function preloadPart(i){
+    if(preloads[i]) return preloads[i].promise;
+    const part = partsRef[i];
+    if(!part) return Promise.resolve();
+    let pathDone = !part.pathImg, testDone = !part.testImg;
+    const pathImgObj = part.pathImg ? new Image() : null;
+    const testImgObj = part.testImg ? new Image() : null;
+    let resolveFn;
+    const promise = new Promise(res=> resolveFn = res);
+    function check(){ if(pathDone && testDone){ resolveFn(); } }
+    if(pathImgObj){ pathImgObj.onload = ()=>{ pathDone=true; check(); }; pathImgObj.onerror = ()=>{ pathDone=true; check(); }; pathImgObj.src = part.pathImg; }
+    if(testImgObj){ testImgObj.onload = ()=>{ testDone=true; check(); }; testImgObj.onerror = ()=>{ testDone=true; check(); }; testImgObj.src = part.testImg; }
+    preloads[i] = { promise, pathImgObj, testImgObj };
+    return promise;
+  }
+  function warmNext(i){ const n=i+1; if(n < partsRef.length){ preloadPart(n).catch(()=>{}); } }
+  let globalRefreshing = false;
+
+  async function start(){
+    console.log('[flightexam] start invoked');
+    adjustLayout();
+    if(active) return;
+    if(window.enterFullscreenMode) window.enterFullscreenMode();
+    // רענון חלקים מה-DB כדי להביא עדכונים אחרונים (כולל ?v=)
+    if(window.refreshFlightExamPartsFromDb){
+      try { globalRefreshing = true; await window.refreshFlightExamPartsFromDb(); } catch(e){ console.warn('[flightexam] refresh parts fail', e); } finally { globalRefreshing = false; }
+    }
+    partsRef = window.getFlightExamParts? (window.getFlightExamParts()||[]):[];
+    currentPart = 0;
+    const timing = window.appSettings && window.appSettings.newExamTiming ? window.appSettings.newExamTiming : null;
+    if(timing){
+      pathDisplaySec = Math.max(1, +timing.pathDisplaySec || pathDisplaySec);
+      preFlightDelaySec = Math.max(0, +timing.preFlightDelaySec || preFlightDelaySec);
+      durationFlightSec = Math.max(5, +timing.flightDurationSec || durationFlightSec);
+      console.log('[flightexam] timing override', {pathDisplaySec, preFlightDelaySec, durationFlightSec});
+    }
+    console.log('[flightexam] parts count=', partsRef.length);
+    partsRef.forEach((p,i)=>{ console.log('[flightexam] part', i, p.name, {hasPath:!!p.pathImg, hasTest:!!p.testImg, points:p.pathPoints? p.pathPoints.length:0}); });
+    if(!partsRef.length){ console.warn('[flightexam] no parts defined'); return; }
+    // הצגת תצוגת מבחן + ספינר טעינה ראשון
+    active = true; stage='preload-first';
+    const view = document.querySelector('#flightexam-screen .test-view'); if(view) view.style.display='block';
+    if(window.testAuth && !window.testAuth.isAdmin()) { statsBox && (statsBox.style.display='none'); } else { statsBox && (statsBox.style.display='block'); }
+    resize(); draw();
+    try {
+      await preloadPart(0); // הורדת תמונות חלק ראשון
+    } catch(e){ console.warn('[flightexam] preload first part error', e); }
+    // לאחר טעינה: מעבר לחלק ראשון
+    loadingStarted=false; userTrack=[]; reviewActive=false; score=100;
+    loadPart(0);
+    startTimer();
+  }
+
+  function loadPart(index){
+    console.log('[flightexam] loadPart', index);
+    userTrack=[]; rotHoldLeft=0; rotHoldRight=0; keyState.ArrowLeft=false; keyState.ArrowRight=false; slowActive=false;
+    reviewActive=false; loadingStarted=false; lastFrameTime=0; sampleAccum=0; score=100;
+    pathImgReady=false; pathImg=null; testImgReady=false; testImg=null; pathPoints=[]; pathCum=[]; pathTotalLen=0; lastDrawBox=null;
+    const part = partsRef[index];
+    if(!part){ console.warn('[flightexam] missing part', index); finalizeReview(true); return; }
+    pathPoints = part.pathPoints? part.pathPoints.slice(): [];
+    if(pathPoints.length>=2){ pathCum=[0]; pathTotalLen=0; for(let i=1;i<pathPoints.length;i++){ const a=pathPoints[i-1], b=pathPoints[i]; const dx=b.x-a.x, dy=b.y-a.y; const d=Math.sqrt(dx*dx+dy*dy); pathTotalLen+=d; pathCum.push(pathTotalLen);} }
+    // שימוש בתמונות שהורדו מראש אם קיימות
+    const preloadRef = preloads[index];
+    if(preloadRef && preloadRef.pathImgObj){ pathImg = preloadRef.pathImgObj; pathImgReady = pathImg.complete; }
+    if(preloadRef && preloadRef.testImgObj){ testImg = preloadRef.testImgObj; testImgReady = testImg.complete; }
+    if(!pathImg && part.pathImg){ pathImg=new Image(); pathImg.onload=()=>{ pathImgReady=true; }; pathImg.onerror=()=>{ pathImgReady=false; }; pathImg.src=part.pathImg; }
+    if(!testImg && part.testImg){ testImg=new Image(); testImg.onload=()=>{ testImgReady=true; }; testImg.onerror=()=>{ testImgReady=false; }; testImg.src=part.testImg; }
+    if(pathImg){ stage='path'; pathStartTime=Date.now(); resize(); }
+    else { stage = preFlightDelaySec>0? 'preflight':'flight'; if(stage==='flight'){ flightStartTime=Date.now(); initPlaneFromPath(); } }
+    warmNext(index); // חימום החלק הבא
+  }
+
+  function initPlaneFromPath(){
+    if(pathPoints && pathPoints.length>=2){ planeNX=pathPoints[0].x; planeNY=pathPoints[0].y; const a=pathPoints[0], b=pathPoints[1]; planeHeading=Math.atan2(b.y-a.y, b.x-a.x); }
+    else { planeNX=0.5; planeNY=0.5; planeHeading=0; }
+  }
+
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0,0,canvas.width,canvas.height);
-    if(stage==='path' && pathImgReady){
+    if(stage==='preload-first'){
+      ctx.fillStyle='#ffffff'; ctx.font='24px system-ui'; ctx.textAlign='center';
+      ctx.fillText(globalRefreshing? 'מרענן חלקים...' : 'טוען חלק ראשון...', canvas.width/2, canvas.height/2 - 30);
+      ctx.font='14px system-ui'; ctx.fillStyle='#94a3b8'; ctx.fillText('אנא המתן, התמונות נטענות', canvas.width/2, canvas.height/2);
+      // ספינר פשוט
+      ctx.save(); ctx.translate(canvas.width/2, canvas.height/2 + 40); ctx.rotate(Date.now()/300); ctx.strokeStyle='#3b82f6'; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(0,0,30,0,Math.PI*1.4); ctx.stroke(); ctx.restore();
+    } else if(stage==='path' && pathImgReady){
       // ציור תמונת המסלול במרכז (שומר על יחס ממדים)
       const sw=pathImg.width, sh=pathImg.height, dw=canvas.width, dh=canvas.height;
       const sr=sw/sh, dr=dw/dh; let w,h; if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
@@ -195,6 +281,7 @@
       // מסך טעינה ביניים עד שהתמונה השנייה מוכנה
       ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.fillStyle='#ffffff'; ctx.font='24px system-ui'; ctx.textAlign='center'; ctx.fillText('טוען תמונת מבחן...', canvas.width/2, canvas.height/2);
+      ctx.fillStyle='#fff'; ctx.font='16px system-ui'; ctx.textAlign='center'; ctx.fillText('טוען תמונת מבחן...', canvas.width/2, canvas.height/2 + 40);
     } else if(stage==='flight'){
       // לפני ציור - עדכון תנועה רציפה
       const now=performance.now();
@@ -330,73 +417,14 @@
     },250);
   }
 
-  function start(){
-    console.log('[flightexam] start invoked');
-    adjustLayout();
-    if(active) return;
-    if (window.enterFullscreenMode) window.enterFullscreenMode();
-    partsRef = window.getFlightExamParts? (window.getFlightExamParts()||[]):[];
-    currentPart = 0;
-    const timing = window.appSettings && window.appSettings.newExamTiming ? window.appSettings.newExamTiming : null;
-    if(timing){
-      pathDisplaySec = Math.max(1, +timing.pathDisplaySec || pathDisplaySec);
-      preFlightDelaySec = Math.max(0, +timing.preFlightDelaySec || preFlightDelaySec);
-      durationFlightSec = Math.max(5, +timing.flightDurationSec || durationFlightSec);
-      console.log('[flightexam] timing override', {pathDisplaySec, preFlightDelaySec, durationFlightSec});
-    }
-    console.log('[flightexam] parts count=', partsRef.length);
-    partsRef.forEach((p,i)=>{ console.log('[flightexam] part', i, p.name, {hasPath:!!p.pathImg, hasTest:!!p.testImg, points:p.pathPoints? p.pathPoints.length:0}); });
-    if(!partsRef.length){ console.warn('[flightexam] no parts defined'); return; }
-    // אתחול גלובלי
-    active = true; startTime = Date.now(); score = 100; reviewActive=false; loadingStarted=false; userTrack=[];
-    const view = document.querySelector('#flightexam-screen .test-view'); if(view) view.style.display='block';
-    if(window.testAuth && !window.testAuth.isAdmin()) { statsBox && (statsBox.style.display='none'); } else { statsBox && (statsBox.style.display='block'); }
-    loadPart(currentPart); // טעינת חלק ראשון
-    resize(); draw(); startTimer();
-  }
-
-  function loadPart(index){
-    console.log('[flightexam] loadPart', index);
-    // איפוס נתונים ספציפיים לחלק (לא מאפס ציוני חוץ מהחלק עצמו)
-    userTrack=[]; rotHoldLeft=0; rotHoldRight=0; keyState.ArrowLeft=false; keyState.ArrowRight=false; slowActive=false;
-    reviewActive=false; loadingStarted=false; lastFrameTime=0; sampleAccum=0; score=100;
-    pathImgReady=false; pathImg=null; testImgReady=false; testImg=null; pathPoints=[]; pathCum=[]; pathTotalLen=0; lastDrawBox=null;
-    const part = partsRef[index];
-    if(!part){ console.warn('[flightexam] missing part', index); finalizeReview(true); return; }
-    // הגדרת נקודות מסלול
-    pathPoints = part.pathPoints? part.pathPoints.slice(): [];
-    if(pathPoints.length>=2){
-      pathCum=[0]; pathTotalLen=0;
-      for(let i=1;i<pathPoints.length;i++){ const a=pathPoints[i-1], b=pathPoints[i]; const dx=b.x-a.x, dy=b.y-a.y; const d=Math.sqrt(dx*dx+dy*dy); pathTotalLen+=d; pathCum.push(pathTotalLen);}  
-    }
-    if(part.pathImg){
-      pathImg=new Image();
-      pathImg.onload=()=>{ pathImgReady=true; resize(); pathStartTime=Date.now(); stage='path'; };
-      pathImg.onerror=()=>{ console.warn('[flightexam] path image failed part', index); pathImgReady=false; pathStartTime=Date.now(); stage='preflight'; preFlightStartTime=Date.now(); };
-      pathImg.src=part.pathImg;
-      stage='path'; pathStartTime=Date.now();
-    } else {
-      // ללא תמונת מסלול -> מעבר ישר לטיסה אחרי ספירת preflight אם יש נקודות? נשמור רצף: נגיע ל-preflight קצר או אפס ואז flight
-      if(preFlightDelaySec>0){ stage='preflight'; preFlightStartTime=Date.now(); }
-      else { stage='flight'; flightStartTime=Date.now(); initPlaneFromPath(); }
-    }
-  }
-
-  function initPlaneFromPath(){
-    if(pathPoints && pathPoints.length>=2){ planeNX=pathPoints[0].x; planeNY=pathPoints[0].y; const a=pathPoints[0], b=pathPoints[1]; planeHeading=Math.atan2(b.y-a.y, b.x-a.x); }
-    else { planeNX=0.5; planeNY=0.5; planeHeading=0; }
-  }
-
   function finish(){
-    if(stage==='review') return; // מניעת כפילות
-    // דגימה סופית של החלק
+    if(stage==='review') return;
     if(pathPoints && pathPoints.length){ const dFinal=closestDistanceToPath(planeNX, planeNY); userTrack.push({x:planeNX,y:planeNY,d:dFinal}); }
     let partScore=score;
     if(userTrack.length){ const avgDist=userTrack.reduce((s,p)=>s+p.d,0)/userTrack.length; const accuracy=Math.max(0, Math.min(1, 1 - avgDist/MAX_DIST_FOR_FULL_SCORE)); partScore=accuracy*100; }
-    partScores[currentPart]=partScore;
-    allTracks[currentPart]=userTrack.slice();
-    // תמיד מציגים REVIEW לכל חלק
+    partScores[currentPart]=partScore; allTracks[currentPart]=userTrack.slice();
     score=partScore; stage='review'; reviewStartTime=Date.now(); reviewActive=true;
+    warmNext(currentPart); // חימום הבא בזמן ההשוואה
   }
 
   function finalizeReview(forceEnd){
@@ -420,6 +448,7 @@
     if(window.exitFullscreenMode) window.exitFullscreenMode();
   }
 
+  startBtn.removeEventListener('click', startBtn._origListener || (()=>{}));
   startBtn.addEventListener('click', start);
 
   // הסרת שליטת עכבר

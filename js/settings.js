@@ -655,6 +655,14 @@
             <div id="orientationSetsContainer" style="display:grid;gap:18px"></div>
             <button id="btnSaveOrientationSets" class="save-settings-btn" style="margin-top:20px">שמור קבוצות</button>
             <span id="orientationStatus" class="route-status" style="margin-top:10px">אין קבוצות מוגדרות</span>
+
+            <h4 style="margin-top:40px;margin-bottom:14px">תמונות קיימות בבסיס (Supabase)</h4>
+            <p style="font-size:0.75rem;color:var(--text-secondary);margin:0 0 10px">טעינה אוטומטית של כל התמונות מהטבלה orientation_images וקיבוץ לפי מספר מבחן. לחיצה כפולה על תמונה לפתיחה מלאה.</p>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <button id="btnReloadOrientationDb" class="btn btn-secondary" style="padding:6px 14px;font-size:0.75rem">↻ רענן</button>
+              <span id="orientationDbStatus" style="font-size:0.75rem;color:var(--text-secondary)">ממתין לטעינה...</span>
+            </div>
+            <div id="orientationDbPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;min-height:60px"></div>
           </div>
   
           <!-- Flight Control Test Settings -->
@@ -1287,12 +1295,15 @@
       
       if(saveBtn) saveBtn.onclick = ()=> {
         saveOrientationSets();
-        // Update the test module
         if(window.loadOrientationSets) {
           window.loadOrientationSets(orientation.questionSets || []);
         }
         updateStatus();
         alert('✓ קבוצות שאלות התמצאות נשמרו בהצלחה');
+        // התחלת סנכרון העלאת קבוצות חדשות ל-Supabase
+        if(window.orientationSync && typeof window.orientationSync.syncNewSets==='function'){
+          window.orientationSync.syncNewSets(orientation.questionSets || []);
+        }
       };
   
       // Bulk upload button
@@ -1366,10 +1377,13 @@
               </div>
             </div>
             <div style="margin-top:6px;font-size:0.75rem;color:#64748b">נקודות: ${p.pathPoints.length}</div>
+            <div class="upload-row" style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+              <button type="button" class="btn-upload-flight" data-i="${idx}" style="padding:8px 16px;font-size:0.75rem;border-radius:8px;border:1px solid #2563eb;background:#3b82f6;color:#fff;cursor:pointer">⬆ העלה ל-Supabase</button>
+              <span class="upload-status" data-i="${idx}" style="font-size:0.7rem;color:#94a3b8"></span>
+            </div>
           `;
           container.appendChild(card);
         });
-        // bind events
         container.querySelectorAll('.nx-name').forEach(inp=>{
           inp.oninput=()=>{ const i=+inp.dataset.i; flightExam.parts[i].name=inp.value.trim()||('חלק '+(i+1)); };
         });
@@ -1397,16 +1411,39 @@
         container.querySelectorAll('.btn-remove-test').forEach(btn=>{ 
           btn.onclick=()=>{ const i=+btn.dataset.i; const part=flightExam.parts[i]; part.testImg=''; part.testW=0; part.testH=0; saveNewExamParts(); renderParts(); updateStatus(); }; 
         });
+        container.querySelectorAll('.btn-upload-flight').forEach(btn=>{
+          btn.onclick=()=>{
+            const i=+btn.dataset.i; const part=flightExam.parts[i];
+            const status=container.querySelector('.upload-status[data-i="'+i+'"]');
+            if(part._uploaded){ status.textContent='כבר הועלה'; return; }
+            if(!part.pathImg || !part.testImg){ alert('חובה להגדיר תמונת מסלול ותמונת מבחן'); return; }
+            if(!part.pathPoints || part.pathPoints.length<2){ alert('חובה להגדיר לפחות שתי נקודות במסלול'); return; }
+            if(!window.flightExamSync || !window.flightExamSync.uploadNewPart){ alert('מודול סנכרון לא נטען'); return; }
+            status.textContent='מעלה...'; btn.disabled=true;
+            window.flightExamSync.uploadNewPart({
+              name: part.name,
+              pathImg: part.pathImg,
+              testImg: part.testImg,
+              pathPoints: part.pathPoints
+            }).then(()=>{
+              part._uploaded=true; status.textContent='✓ הועלה'; btn.disabled=true;
+            }).catch(err=>{
+              console.warn('upload error', err); status.textContent='שגיאה'; btn.disabled=false;
+            });
+          };
+          const i=+btn.dataset.i; const part=flightExam.parts[i];
+          if(part._uploaded){ btn.disabled=true; const status=container.querySelector('.upload-status[data-i="'+i+'"]'); if(status) status.textContent='✓ הועלה'; }
+          else if(!part.pathImg || !part.testImg || !part.pathPoints || part.pathPoints.length<2){ btn.disabled=true; const status=container.querySelector('.upload-status[data-i="'+i+'"]'); if(status) status.textContent='חסר נתונים'; }
+        });
         updateStatus();
       }
-      // רישום גלובלי לגישה מעורך המסלול
       renderNewExamPartsRef = renderParts;
       window.renderNewExamParts = renderParts;
       if(addBtn) addBtn.onclick=()=>{ const id='p'+Date.now(); flightExam.parts.push(createPart(id)); renderParts(); };
-      if(saveBtn) saveBtn.onclick=()=>{ // אימות לפני שמירה
+      if(saveBtn) saveBtn.onclick=()=>{ 
         for(const p of flightExam.parts){ if(p.pathImg && p.testImg){ if(p.pathW!==p.testW || p.pathH!==p.testH){ alert('חלק "'+p.name+'" לא נשמר: גדלי התמונות אינם זהים'); return; } } }
         saveNewExamParts(); updateStatus(); alert('✓ חלקי מבחן הטסה נשמרו'); };
-      autoLoadDefaultFlightExamParts(); // נסיון טעינה אוטומטית גם בתוך הטאב
+      autoLoadDefaultFlightExamParts();
       renderParts();
     }
   
@@ -1424,14 +1461,14 @@
       nameSpan.textContent=part.name;
       modal.style.display='flex';
       let img=new Image(); let imgReady=false; let points=[...part.pathPoints];
-      function fitContain(sw,sh,dw,dh){ const sr=sw/sh, dr=dw/dh; if(sr>dr){ const w=dw, h=w/sr; return {w,h}; } else { const h=dh, w=h*sr; } }
+      function fitContain(sw,sh,dw,dh){ const sr=sw/sh, dr=dw/dh; if(sr>dr){ const w=dw, h=w/sr; return {w,h}; } else { const h=dh, w=h*sr; return {w,h}; } }
       function resize(){ const w=Math.min(1000, window.innerWidth*0.8); const h=Math.min(700, window.innerHeight*0.6); canvas.width=w; canvas.height=h; draw(); }
       function draw(){ const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,canvas.width,canvas.height); if(imgReady){ const box=fitContain(img.width,img.height,canvas.width,canvas.height); const ox=(canvas.width-box.w)/2, oy=(canvas.height-box.h)/2; ctx.drawImage(img,ox,oy,box.w,box.h); if(points.length){ ctx.lineWidth=3; ctx.strokeStyle='#3b82f6'; ctx.beginPath(); points.forEach((p,i)=>{ const x=ox+p.x*box.w; const y=oy+p.y*box.h; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke(); points.forEach((p,i)=>{ const x=ox+p.x*box.w; const y=oy+p.y*box.h; ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fillStyle=i===0? '#10b981': (i===points.length-1?'#ef4444':'#f59e0b'); ctx.fill(); }); } }
         status.textContent=points.length? 'נקודות: '+points.length : 'אין נקודות'; }
       function canvasClick(e){ if(!imgReady) return; const rect=canvas.getBoundingClientRect(); const cx=e.clientX-rect.left; const cy=e.clientY-rect.top; const box=fitContain(img.width,img.height,canvas.width,canvas.height); const ox=(canvas.width-box.w)/2, oy=(canvas.height-box.h)/2; if(cx<ox||cx>ox+box.w||cy<oy||cy>oy+box.h) return; const nx=(cx-ox)/box.w, ny=(cy-oy)/box.h; points.push({x:nx,y:ny}); status.textContent='נקודות: '+points.length; draw(); }
       function removeLast(){ if(points.length){ points.pop(); status.textContent=points.length? 'נקודות: '+points.length : 'אין נקודות'; draw(); } }
       function resetAll(){ if(points.length && confirm('לאפס את כל הנקודות?')){ points=[]; status.textContent='אין נקודות'; draw(); } }
-      function savePoints(){ part.pathPoints=[...points]; saveNewExamParts().then(()=>{ if(renderNewExamPartsRef) renderNewExamPartsRef(); alert('✓ נשמרו '+points.length+' נקודות'); }); }
+      function savePoints(){ part.pathPoints=[...points]; saveNewExamParts().then(()=>{ if(window.flightExamSync && part.partNumber){ window.flightExamSync.updatePartPoints(part.partNumber, part.pathPoints); } if(renderNewExamPartsRef) renderNewExamPartsRef(); alert('✓ נשמרו '+points.length+' נקודות'); }); }
       img.onload=()=>{ imgReady=true; resize(); }; img.src=part.pathImg;
       window.addEventListener('resize', resize);
       canvas.addEventListener('click', canvasClick);
@@ -1442,7 +1479,8 @@
     }
   
     function verifyImage(dataUrl){
-      return new Promise(res=>{ if(!dataUrl){ return res(false); } const im=new Image(); let done=false; const t=setTimeout(()=>{ if(!done){ done=true; res(false); } },4000); im.onload=()=>{ if(!done){ done=true; clearTimeout(t); res(true); } }; im.onerror=()=>{ if(!done){ done.true; clearTimeout(t); res(false); } }; im.src=dataUrl + (dataUrl.startsWith('data:')? '' : (dataUrl.includes('?')? '&':'?')+'v=' + Date.now()); });
+      // תיקון done.true -> done=true
+      return new Promise(res=>{ if(!dataUrl){ return res(false); } const im=new Image(); let done=false; const t=setTimeout(()=>{ if(!done){ done=true; res(false); } },4000); im.onload=()=>{ if(!done){ done=true; clearTimeout(t); res(true); } }; im.onerror=()=>{ if(!done){ done=true; clearTimeout(t); res(false); } }; im.src=dataUrl + (dataUrl.startsWith('data:')? '' : (dataUrl.includes('?')? '&':'?')+'v=' + Date.now()); });
     }
   
     function setupSave(){
@@ -1624,6 +1662,111 @@
     }
     window.exportAllSettings = exportAllSettings;
     window.exportSettingsZip = exportSettingsZip;
+
+    // === Supabase Orientation DB Preview ===
+    function loadOrientationDbPreview(force){
+      const holder = document.getElementById('orientationDbPreview');
+      const status = document.getElementById('orientationDbStatus');
+      if(!holder || !status) return;
+      if(force){ holder.innerHTML=''; }
+      status.textContent='טוען...';
+      if(!window.supabaseClient){
+        status.textContent='Supabase לא מאותחל';
+        return;
+      }
+      window.supabaseClient
+        .from('orientation_images')
+        .select('id,test_number,view_type,code,storage_path')
+        .order('test_number',{ascending:true})
+        .then(async ({data,error})=>{
+          if(error){ status.textContent='שגיאה: '+error.message; return; }
+          if(!data || !data.length){ status.textContent='אין רשומות בטבלה'; holder.innerHTML=''; return; }
+          // קיבוץ לפי test_number
+          const groups = new Map();
+          data.forEach(r=>{
+            if(!groups.has(r.test_number)) groups.set(r.test_number,{ top:null, views:[], num:r.test_number });
+            const g=groups.get(r.test_number);
+            if(r.view_type==='top') g.top=r; else g.views.push(r);
+          });
+          const bucket = window.supabaseClient.storage.from('orientation');
+          holder.innerHTML='';
+          const frag = document.createDocumentFragment();
+          groups.forEach(g=>{
+            const card = document.createElement('div');
+            card.className='orient-db-card';
+            card.dataset.testNumber = g.num; // הוספת מזהה מבחן לכרטיס למחיקה עתידית
+            card.style.cssText='border:2px solid var(--border-color);border-radius:12px;padding:10px;background:var(--bg-secondary);display:flex;flex-direction:column;gap:8px;position:relative;';
+            const title = document.createElement('div');
+            title.style.cssText='font-weight:600;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center';
+            title.innerHTML = `<span>מבחן ${g.num}</span><span style="font-size:0.7rem;color:var(--text-secondary)">${g.views.length} מבטים</span>`;
+            card.appendChild(title);
+            // Top image
+            if(g.top){
+              const topUrl = bucket.getPublicUrl(g.top.storage_path).data.publicUrl;
+              const wrap = document.createElement('div');
+              wrap.style.cssText='position:relative;height:110px;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;';
+              wrap.innerHTML = `<img draggable="false" data-full="${topUrl}" alt="top" src="${topUrl}" style="width:100%;height:100%;object-fit:cover;filter:brightness(0.92)">`+
+                `<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;font-size:0.65rem;padding:2px 4px;text-align:center">TOP</div>`;
+              card.appendChild(wrap);
+            }
+            // Views grid
+            const viewsGrid = document.createElement('div');
+            viewsGrid.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:6px;';
+            g.views.forEach(v=>{
+              const viewUrl = bucket.getPublicUrl(v.storage_path).data.publicUrl;
+              const cell = document.createElement('div');
+              cell.style.cssText='position:relative;height:60px;border:1px solid var(--border-color);border-radius:6px;overflow:hidden;cursor:zoom-in;background:#0f172a;';
+              cell.innerHTML = `<img draggable="false" data-full="${viewUrl}" alt="${v.code}" src="${viewUrl}" style="width:100%;height:100%;object-fit:cover">`+
+                `<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:#fff;font-size:0.55rem;padding:1px;text-align:center">${v.code}</div>`;
+              viewsGrid.appendChild(cell);
+            });
+            card.appendChild(viewsGrid);
+            frag.appendChild(card);
+          });
+          holder.appendChild(frag);
+          status.textContent='טעון: '+groups.size+' קבוצות';
+          attachOrientationDbPreviewEvents();
+        }).catch(e=>{ status.textContent='שגיאה: '+e.message; });
+    }
+    // חשיפת הפונקציה לגלובל לשימוש orientation-sync
+    window.loadOrientationDbPreview = loadOrientationDbPreview;
+
+    function attachOrientationDbPreviewEvents(){
+      const holder = document.getElementById('orientationDbPreview');
+      if(!holder) return;
+      holder.querySelectorAll('img[data-full]').forEach(img=>{
+        img.ondblclick = ()=> openPreviewModal(img.getAttribute('data-full'), img.getAttribute('alt'));
+      });
+      const reloadBtn = document.getElementById('btnReloadOrientationDb');
+      if(reloadBtn){ reloadBtn.onclick=()=> loadOrientationDbPreview(true); }
+      // הזרקת סטייל פעם אחת
+      if(!document.getElementById('orientationDbPreviewStyles')){
+        const st=document.createElement('style');
+        st.id='orientationDbPreviewStyles';
+        st.textContent=`.orient-db-card:hover{box-shadow:0 0 0 2px var(--accent-primary) inset;}`;
+        document.head.appendChild(st);
+      }
+    }
+
+    function openPreviewModal(url, label){
+      const modal = document.createElement('div');
+      modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;display:flex;align-items:center;justify-content:center;padding:30px;';
+      modal.innerHTML = `<div style="max-width:90%;max-height:90%;position:relative;display:flex;flex-direction:column;">\n        <img src="${url}" alt="${label}" style="max-width:100%;max-height:80vh;object-fit:contain;border:4px solid #1e293b;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.6)">\n        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;color:#fff">\n          <span>${label||''}</span>\n          <button id="closeOrientPreview" style="padding:6px 14px;background:#ef4444;border:none;border-radius:8px;color:#fff;cursor:pointer">סגור ✕</button>\n        </div>\n      </div>`;
+      document.body.appendChild(modal);
+      function close(){ modal.remove(); }
+      modal.addEventListener('click', e=>{ if(e.target===modal) close(); });
+      document.getElementById('closeOrientPreview').onclick=close;
+      document.addEventListener('keydown', function esc(e){ if(e.key==='Escape'){ close(); document.removeEventListener('keydown', esc);} });
+    }
+
+    // עדכון: טעינת תצוגת התמונות כאשר טאב התמצאות נבחר
+    document.addEventListener('click', e=>{
+      const btn = e.target.closest('.admin-tab-btn[data-admin-tab="orientation"]');
+      if(btn){ setTimeout(()=> loadOrientationDbPreview(false), 50); }
+    });
+
+    // אם כבר אותחל הממשק ו-Supabase קיים נטען מיד (למקרה שהטאב פעיל כברירת מחדל)
+    if(window.supabaseClient){ setTimeout(()=>{ const orientTab=document.querySelector('.admin-tab-btn[data-admin-tab="orientation"]'); if(orientTab && orientTab.classList.contains('active')) loadOrientationDbPreview(false); },400); }
 
     // Promise גלובלי המאפשר למודולים להמתין לסיום טעינת קובץ ברירת המחדל
     window.settingsReady = new Promise(res=>{ window._settingsReadyResolve = res; });
