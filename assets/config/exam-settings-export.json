@@ -1,0 +1,681 @@
+{
+  "version": 1,
+  "exportedAt": "2025-11-16T21:47:20.463Z",
+  "settings": {
+    "candidateId": "",
+    "scaleMin": 1,
+    "scaleMax": 7,
+    "reactionShapeDisplaySec": 1,
+    "tests": [
+      {
+        "id": "orientation",
+        "name": "התמצאות וכיוונים",
+        "include": true,
+        "seconds": 360,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "eyehand",
+        "name": "תיאום עין-יד",
+        "include": true,
+        "seconds": 30,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "reaction",
+        "name": "זמן תגובה",
+        "include": true,
+        "seconds": 40,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "memory",
+        "name": "זיכרון מרחבי",
+        "include": true,
+        "seconds": 60,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "tracking",
+        "name": "מעקב וקשב",
+        "include": true,
+        "seconds": 30,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "northfind",
+        "name": "מציאת הצפון",
+        "include": true,
+        "seconds": 45,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "flightcontrol",
+        "name": "בקרת טיסה",
+        "include": true,
+        "seconds": 60,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "targetid",
+        "name": "ירי במטרות",
+        "include": true,
+        "seconds": 60,
+        "difficulty": "קשה"
+      },
+      {
+        "id": "flightexam",
+        "name": "מבחן הטסה",
+        "include": true,
+        "seconds": 20,
+        "difficulty": "קשה"
+      }
+    ],
+    "newExamTiming": {
+      "pathDisplaySec": 15,
+      "preFlightDelaySec": 10,
+      "flightDurationSec": 60
+    }
+  },
+  "north": {
+    "trials": 5,
+    "showNorthSec": 3,
+    "spinSec": 6,
+    "answerSec": 10,
+    "mapImages": []
+  },
+  "flightExam": {
+    "parts": [
+      {
+        "id": "auto_1",
+        "name": "חלק 1",
+        "pathImg": "assets/images/flightexam/viewOnly/1.jpeg",
+        "testImg": "assets/images/flightexam/test/1.jpeg",
+        "pathW": 0,
+        "pathH": 0,
+        "testW": 0,
+        "testH": 0,
+        "pathPoints": [
+          {
+            "x": 0.0065,
+            "y": 0.6155277777777778
+          },
+          {
+            "x": 0.1005,
+            "y": 0.5461944444444444
+          },
+          {
+            "x": 0.1855,
+            "y": 0.45552777777777775
+          },
+          {
+            "x": 0.2515,
+            "y": 0.42886111111111114
+          },
+          {
+            "x": 0.3115,
+            "y": 0.5515277777777777
+          },
+          {
+            "x": 0.3325,
+            "y": 0.6244166666666666
+          },
+          {
+            "x": 0.3815,
+            "y": 0.7470833333333333
+          },
+          {
+            "x": 0.4305,
+            "y": 0.8910833333333333
+          },
+          {
+            "x": 0.4575,
+            "y": 0.9390833333333334
+          },
+          {
+            "x": 0.5345,
+            "y": 0.82175
+          },
+          {
+            "x": 0.5945,
+            "y": 0.7346388888888888
+          },
+          {
+            "x": 0.6515,
+            "y": 0.6315277777777778
+          },
+          {
+            "x": 0.7475,
+            "y": 0.5621944444444444
+          },
+          {
+            "x": 0.7335,
+            "y": 0.43419444444444444
+          },
+          {
+            "x": 0.6685,
+            "y": 0.27419444444444446
+          },
+          {
+            "x": 0.5885,
+            "y": 0.2866388888888889
+          },
+          {
+            "x": 0.4235,
+            "y": 0.3488611111111111
+          },
+          {
+            "x": 0.3815,
+            "y": 0.3595277777777778
+          },
+          {
+            "x": 0.3595,
+            "y": 0.18886111111111112
+          },
+          {
+            "x": 0.3255,
+            "y": 0.11241666666666666
+          },
+          {
+            "x": 0.2465,
+            "y": 0.08930555555555555
+          },
+          {
+            "x": 0.1595,
+            "y": 0.11952777777777777
+          },
+          {
+            "x": 0.0765,
+            "y": 0.06086111111111111
+          }
+        ]
+      },
+      {
+        "id": "auto_2",
+        "name": "חלק 2",
+        "pathImg": "assets/images/flightexam/viewOnly/2.jpeg",
+        "testImg": "assets/images/flightexam/test/2.jpeg",
+        "pathW": 0,
+        "pathH": 0,
+        "testW": 0,
+        "testH": 0,
+        "pathPoints": [
+          {
+            "x": 0.0405,
+            "y": 0.9106388888888889
+          },
+          {
+            "x": 0.0995,
+            "y": 0.7008611111111112
+          },
+          {
+            "x": 0.1865,
+            "y": 0.5248611111111111
+          },
+          {
+            "x": 0.2675,
+            "y": 0.5924166666666667
+          },
+          {
+            "x": 0.3805,
+            "y": 0.7453055555555556
+          },
+          {
+            "x": 0.4755,
+            "y": 0.8519722222222222
+          },
+          {
+            "x": 0.5655,
+            "y": 0.9248611111111111
+          },
+          {
+            "x": 0.5885,
+            "y": 0.8573055555555555
+          },
+          {
+            "x": 0.6105,
+            "y": 0.7275277777777778
+          },
+          {
+            "x": 0.6435,
+            "y": 0.5693055555555555
+          },
+          {
+            "x": 0.6715,
+            "y": 0.41641666666666666
+          },
+          {
+            "x": 0.6615,
+            "y": 0.30975
+          },
+          {
+            "x": 0.5175,
+            "y": 0.20841666666666667
+          },
+          {
+            "x": 0.4065,
+            "y": 0.10886111111111112
+          },
+          {
+            "x": 0.3015,
+            "y": 0.11241666666666666
+          },
+          {
+            "x": 0.2535,
+            "y": 0.23508333333333334
+          },
+          {
+            "x": 0.2875,
+            "y": 0.32219444444444445
+          },
+          {
+            "x": 0.3475,
+            "y": 0.34708333333333335
+          },
+          {
+            "x": 0.4255,
+            "y": 0.36841666666666667
+          }
+        ]
+      },
+      {
+        "id": "auto_3",
+        "name": "חלק 3",
+        "pathImg": "assets/images/flightexam/viewOnly/3.jpeg",
+        "testImg": "assets/images/flightexam/test/3.jpeg",
+        "pathW": 0,
+        "pathH": 0,
+        "testW": 0,
+        "testH": 0,
+        "pathPoints": [
+          {
+            "x": 0.9625,
+            "y": 0.7293055555555555
+          },
+          {
+            "x": 0.8775,
+            "y": 0.6546388888888889
+          },
+          {
+            "x": 0.7445,
+            "y": 0.5159722222222223
+          },
+          {
+            "x": 0.6635,
+            "y": 0.4146388888888889
+          },
+          {
+            "x": 0.6385,
+            "y": 0.5195277777777778
+          },
+          {
+            "x": 0.6205,
+            "y": 0.5941944444444445
+          },
+          {
+            "x": 0.5305,
+            "y": 0.47330555555555553
+          },
+          {
+            "x": 0.4475,
+            "y": 0.3790833333333333
+          },
+          {
+            "x": 0.3625,
+            "y": 0.2901944444444444
+          },
+          {
+            "x": 0.2935,
+            "y": 0.22797222222222221
+          },
+          {
+            "x": 0.2265,
+            "y": 0.14975
+          },
+          {
+            "x": 0.1765,
+            "y": 0.2564166666666667
+          },
+          {
+            "x": 0.1125,
+            "y": 0.3541944444444444
+          },
+          {
+            "x": 0.0885,
+            "y": 0.46975
+          },
+          {
+            "x": 0.1685,
+            "y": 0.5515277777777777
+          },
+          {
+            "x": 0.2915,
+            "y": 0.6564166666666666
+          },
+          {
+            "x": 0.4125,
+            "y": 0.7630833333333333
+          },
+          {
+            "x": 0.5175,
+            "y": 0.8466388888888889
+          },
+          {
+            "x": 0.6125,
+            "y": 0.9141944444444444
+          }
+        ]
+      },
+      {
+        "id": "auto_4",
+        "name": "חלק 4",
+        "pathImg": "assets/images/flightexam/viewOnly/4.jpeg",
+        "testImg": "assets/images/flightexam/test/4.jpeg",
+        "pathW": 0,
+        "pathH": 0,
+        "testW": 0,
+        "testH": 0,
+        "pathPoints": [
+          {
+            "x": 0.0795,
+            "y": 0.9568611111111112
+          },
+          {
+            "x": 0.1475,
+            "y": 0.77375
+          },
+          {
+            "x": 0.2165,
+            "y": 0.6155277777777778
+          },
+          {
+            "x": 0.2755,
+            "y": 0.6706388888888889
+          },
+          {
+            "x": 0.3575,
+            "y": 0.7933055555555556
+          },
+          {
+            "x": 0.4255,
+            "y": 0.8590833333333333
+          },
+          {
+            "x": 0.4665,
+            "y": 0.8981944444444444
+          },
+          {
+            "x": 0.5415,
+            "y": 0.9248611111111111
+          },
+          {
+            "x": 0.6095,
+            "y": 0.8999722222222222
+          },
+          {
+            "x": 0.6565,
+            "y": 0.8199722222222222
+          },
+          {
+            "x": 0.7285,
+            "y": 0.7221944444444445
+          },
+          {
+            "x": 0.7585,
+            "y": 0.6101944444444445
+          },
+          {
+            "x": 0.7515,
+            "y": 0.4910833333333333
+          },
+          {
+            "x": 0.6725,
+            "y": 0.41641666666666666
+          },
+          {
+            "x": 0.5865,
+            "y": 0.33641666666666664
+          },
+          {
+            "x": 0.5185,
+            "y": 0.28841666666666665
+          },
+          {
+            "x": 0.4825,
+            "y": 0.38619444444444445
+          },
+          {
+            "x": 0.4455,
+            "y": 0.45019444444444445
+          },
+          {
+            "x": 0.3795,
+            "y": 0.39152777777777775
+          },
+          {
+            "x": 0.3225,
+            "y": 0.42886111111111114
+          },
+          {
+            "x": 0.2345,
+            "y": 0.3346388888888889
+          },
+          {
+            "x": 0.1695,
+            "y": 0.2564166666666667
+          },
+          {
+            "x": 0.1355,
+            "y": 0.12841666666666668
+          },
+          {
+            "x": 0.2855,
+            "y": 0.05375
+          },
+          {
+            "x": 0.4045,
+            "y": 0.07863888888888888
+          },
+          {
+            "x": 0.4685,
+            "y": 0.1515277777777778
+          }
+        ]
+      }
+    ]
+  },
+  "orientation": {
+    "maxQuestions": 10,
+    "timeLimitMin": 6,
+    "scoreScale": 7,
+    "showCompass": true,
+    "displayTimeSec": 10,
+    "questionText": "ציין מאיזה כיוון לאיזה כיוון זווית הצילום",
+    "questionSets": [
+      {
+        "id": "default_1",
+        "name": "תרגיל כיוונים 1",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 1/1-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 1/1-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 1/1-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 1/1-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 1/1-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_2",
+        "name": "תרגיל כיוונים 2",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 2/2-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 2/2-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 2/2-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 2/2-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 2/2-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_3",
+        "name": "תרגיל כיוונים 3",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 3/3-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 3/3-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 3/3-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 3/3-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 3/3-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_4",
+        "name": "תרגיל כיוונים 4",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 4/4-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 4/4-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 4/4-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 4/4-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 4/4-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_5",
+        "name": "תרגיל כיוונים 5",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 5/5-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 5/5-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 5/5-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 5/5-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 5/5-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_6",
+        "name": "תרגיל כיוונים 6",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 6/6-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 6/6-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 6/6-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 6/6-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 6/6-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_7",
+        "name": "תרגיל כיוונים 7",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 7/7-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 7/7-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 7/7-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 7/7-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 7/7-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      },
+      {
+        "id": "default_8",
+        "name": "תרגיל כיוונים 8",
+        "topImage": "assets/images/orientation/תרגיל כיוונים 8/8-TOP.jpeg",
+        "viewImages": [
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 8/8-N2S.jpeg",
+            "orient": "N2S"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 8/8-S2N.jpeg",
+            "orient": "S2N"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 8/8-E2W.jpeg",
+            "orient": "E2W"
+          },
+          {
+            "url": "assets/images/orientation/תרגיל כיוונים 8/8-W2E.jpeg",
+            "orient": "W2E"
+          }
+        ]
+      }
+    ]
+  }
+}
