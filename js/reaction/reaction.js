@@ -34,8 +34,6 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.stdEl=document.getElementById('reaction-std');
             this.scoreBox=document.getElementById('reaction-score-box');
             this.scoreValue=document.getElementById('reaction-score-value');
-            this.phaseBanner=document.getElementById('reaction-phase-banner');
-            this.realStartBtn=document.getElementById('reaction-real-start-button');
             this.countdownEl=document.getElementById('reaction-countdown');
             this.stage='idle'; // idle | practice | countdown | real | done
             this.practiceDone=false;
@@ -44,13 +42,42 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.activeMode=null; // practice | real
             this._onResize=null; this._keyHandler=null;
             this.lockToken=null;
+            this.practiceModalEl=null;
             this.bind();
         }
         bind(){
             const startBtn=document.getElementById('start-reaction-button');
             if(startBtn) startBtn.addEventListener('click',()=>this.startPractice());
-            if(this.realStartBtn) this.realStartBtn.addEventListener('click',()=>this.startRealCountdown());
             if(this.area){ this.area.style.pointerEvents='none'; }
+        }
+        ensurePracticeModal(){
+            if(this.practiceModalEl) return this.practiceModalEl;
+            const overlay=document.createElement('div');
+            overlay.id='reaction-practice-modal';
+            overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML=`
+              <div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
+                <div style="font-size:2.6rem;margin-bottom:12px">⚡</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
+                </p>
+                <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+              </div>`;
+            document.body.appendChild(overlay);
+            this.practiceModalEl=overlay;
+            return overlay;
+        }
+        showPracticeModal(onContinue){
+            const modal=this.ensurePracticeModal();
+            modal.style.display='flex';
+            const confirmBtn=modal.querySelector('[data-action="confirm"]');
+            if(confirmBtn){
+                confirmBtn.onclick=()=>{
+                    modal.style.display='none';
+                    if(typeof onContinue==='function') onContinue();
+                };
+            }
         }
         getInteractionOptions(mode){
             return {
@@ -80,22 +107,29 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             }
         }
         setBanner(text,mode){
-            if(!this.phaseBanner) return;
+            // Use global practice banner for consistent UI
+            if(!window.practiceBanner) return;
             if(!text){
-                this.phaseBanner.style.display='none';
-                this.phaseBanner.textContent='';
-                this.phaseBanner.removeAttribute('data-mode');
+                window.practiceBanner.hide();
                 return;
             }
-            this.phaseBanner.style.display='block';
-            this.phaseBanner.textContent=text;
-            if(mode){ this.phaseBanner.setAttribute('data-mode',mode); }
-            else { this.phaseBanner.removeAttribute('data-mode'); }
-        }
-        toggleRealStartButton(show, disabled=false){
-            if(!this.realStartBtn) return;
-            this.realStartBtn.style.display=show?'inline-flex':'none';
-            this.realStartBtn.disabled=!!disabled;
+            const labels = {
+                'practice': 'מצב תרגול',
+                'countdown': 'ספירה לאחור',
+                'real': 'מבחן אמיתי',
+                'done': 'הסתיים'
+            };
+            const descriptions = {
+                'practice': 'התוצאות אינן נשמרות',
+                'countdown': 'המבחן האמיתי עומד להתחיל',
+                'real': 'התוצאות נשמרות',
+                'done': ''
+            };
+            window.practiceBanner.show({
+                label: labels[mode] || text,
+                description: descriptions[mode] || '',
+                mode: mode || 'practice'
+            });
         }
         setCountdown(text){
             if(!this.countdownEl) return;
@@ -153,8 +187,7 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.setBanner('תרגול - התוצאות אינן נשמרות', 'practice');
             this.setCountdown(null);
             this.clearCountdown();
-            this.toggleRealStartButton(true, false);
-            this.setStatus('תרגול: אגיב לריבועים הירוקים בזמן', 'info');
+            this.setStatus('יש להגיב לריבועים הירוקים בלחיצה על מקש הרווח', 'muted');
             this.updateStatsVisibility();
             this.startSeries('practice');
         }
@@ -163,15 +196,16 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.stage='practice';
             this.practiceDone=true;
             this.activeMode=null;
-            if(!skipMessage){
-                this.setStatus('התרגול הסתיים. לחצו על "סיימתי תרגול – להתחיל מבחן אמיתי" כדי להמשיך.', 'info');
-                this.setBanner('התרגול הסתיים - ניתן להתחיל את המבחן האמיתי', 'practice');
-            }
-            this.toggleRealStartButton(true,false);
             this.setCountdown(null);
             this.clearCountdown();
             this.updateStatsVisibility();
+            this.setBanner(null); // Hide banner
             if(!keepFullscreen && window.exitFullscreenMode) window.exitFullscreenMode();
+            // Show practice end modal
+            if(!skipMessage){
+                this.setStatus('', 'muted');
+                this.showPracticeModal(()=>this.startRealCountdown());
+            }
         }
         startRealCountdown(){
             if(this.stage==='real' || this.stage==='countdown' || this.stage==='done') return;
@@ -182,8 +216,7 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.clearCountdown();
             this.stage='countdown';
             this.activeMode=null;
-            this.setBanner('ספירה לאחור למבחן האמיתי', 'countdown');
-            this.toggleRealStartButton(true, true);
+            this.setBanner('המבחן האמיתי עומד להתחיל', 'countdown');
             this.countdownRemaining=10;
             const label=this.countdownRemaining===1?'שנייה':'שניות';
             this.setCountdown(`המבחן האמיתי יתחיל בעוד ${this.countdownRemaining} ${label}`);
@@ -205,11 +238,10 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
         startRealTest(){
             this.clearCountdown();
             this.setCountdown(null);
-            this.toggleRealStartButton(false);
             this.stage='real';
             this.activeMode='real';
             this.setBanner('מבחן אמיתי - התוצאות נשמרות', 'real');
-            this.setStatus('מבחן אמיתי: אגיב במהירות לריבועים הירוקים', 'info');
+            this.setStatus('יש להגיב לריבועים הירוקים בלחיצה על מקש הרווח', 'muted');
             this.updateStatsVisibility();
             this.startSeries('real');
         }

@@ -35,7 +35,14 @@
         subEl.style.display = 'none';
       }
     }
-    el.dataset.mode = opts.mode || 'practice';
+    // Set mode in dataset for CSS styling
+    if(opts.mode){
+      el.dataset.mode = opts.mode;
+      el.setAttribute('data-mode', opts.mode);
+    } else {
+      el.dataset.mode = 'practice';
+      el.setAttribute('data-mode', 'practice');
+    }
     el.classList.remove('hidden');
   }
 

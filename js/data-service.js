@@ -104,10 +104,30 @@
     const client = ensureClient();
     const trimmed = (identifier||'').trim();
     if(!trimmed) return null;
+    // מחזיר את כל המשתמשים עם אותה תעודת זהות (יכולים להיות מספר רישומים)
     const { data, error } = await client
       .from('exam_users')
-      .select('id,first_name,last_name,national_id,entry_pin,tests_completed,all_tests_done,scores,notes,created_at')
+      .select('id,first_name,last_name,national_id,entry_pin,tests_completed,all_tests_done,scores,notes,created_at,access_window_start,access_window_end')
       .eq('national_id', trimmed)
+      .order('created_at', {ascending: false})
+      .limit(1);
+    if(error) throw error;
+    if(Array.isArray(data) && data.length) return data[0];
+    return null;
+  }
+
+  // פונקציה חדשה - מחפשת משתמש לפי תעודת זהות וקוד כניסה יחד
+  async function fetchUserByCredentials(nationalId, entryPin){
+    if(!isReady()) throw new Error('Supabase client missing');
+    const client = ensureClient();
+    const trimmedId = (nationalId||'').trim();
+    const trimmedPin = (entryPin||'').trim();
+    if(!trimmedId || !trimmedPin) return null;
+    const { data, error } = await client
+      .from('exam_users')
+      .select('id,first_name,last_name,national_id,entry_pin,tests_completed,all_tests_done,scores,notes,created_at,access_window_start,access_window_end')
+      .eq('national_id', trimmedId)
+      .eq('entry_pin', trimmedPin)
       .limit(1);
     if(error) throw error;
     if(Array.isArray(data) && data.length) return data[0];
@@ -135,7 +155,7 @@
     if(!userId) return [];
     const { data, error } = await client
       .from('exam_user_attempts')
-      .select('id,test_id,raw_score,scaled_score,completed_at')
+      .select('id,test_id,raw_score,scaled_score,completed_at,summary,raw_payload,stage,candidate_id')
       .eq('candidate_id', userId)
       .order('completed_at',{ascending:true});
     if(error) throw error;
@@ -165,7 +185,7 @@
     const limit = opts.limit || 50;
     let query = client
       .from('exam_users')
-      .select('id,national_id,first_name,last_name,entry_pin,notes,tests_completed,all_tests_done,scores,created_at,updated_at')
+      .select('id,national_id,first_name,last_name,entry_pin,notes,tests_completed,all_tests_done,scores,created_at,updated_at,access_window_start,access_window_end')
       .order('created_at',{ascending:false})
       .limit(limit);
     if(opts.search){
@@ -192,6 +212,8 @@
     body.entry_pin = (body.entry_pin||'').trim();
     if(!body.national_id){ throw new Error('חובה להזין תעודת זהות'); }
     if(!body.entry_pin){ throw new Error('הפקת קוד כניסה נדרשת'); }
+    if(body.access_window_start === '') body.access_window_start = null;
+    if(body.access_window_end === '') body.access_window_end = null;
     const { data, error } = await client
       .from('exam_users')
       .insert([body])
@@ -210,6 +232,8 @@
     if(body.first_name) body.first_name = body.first_name.trim();
     if(body.last_name) body.last_name = body.last_name.trim();
     if(body.entry_pin) body.entry_pin = body.entry_pin.trim();
+    if(body.hasOwnProperty('access_window_start') && body.access_window_start === '') body.access_window_start = null;
+    if(body.hasOwnProperty('access_window_end') && body.access_window_end === '') body.access_window_end = null;
     const { data, error } = await client
       .from('exam_users')
       .update(body)
@@ -462,6 +486,7 @@
     fetchActiveSettings,
     saveSettingsBundle,
     fetchUserByIdentifier,
+    fetchUserByCredentials,
     fetchAdminByIdentifier,
     fetchUserAttempts,
     recordAttempt,

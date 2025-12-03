@@ -339,11 +339,13 @@
           <div class="settings-section section-users" data-tab-section="users" style="display:none">
             <h3>ניהול מועמדים</h3>
             <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:18px">עבודה מול טבלת <code>exam_users</code> ב-Supabase – ניתן לחפש לפי תעודת זהות או שם, לעדכן פרטי מועמד ולסמן השלמת כלל המבחנים.</p>
-            <div class="user-mgmt" style="display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:20px;align-items:flex-start;flex-wrap:wrap;">
-              <div class="user-mgmt-list" style="border:2px solid var(--border-color);border-radius:14px;padding:16px;background:var(--bg-secondary);box-shadow:var(--shadow-sm);min-width:0;">
+            <div class="user-mgmt">
+              <div class="user-mgmt-list" style="border:2px solid var(--border-color);border-radius:14px;padding:16px;background:var(--bg-secondary);box-shadow:var(--shadow-sm);">
                 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;">
-                  <input id="userSearchInput" type="search" placeholder="חיפוש לפי תעודת זהות או שם" style="flex:1;padding:10px 12px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);min-width:220px;">
-                  <select id="userCompletionFilter" style="padding:10px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);min-width:150px;">
+                  <button id="userOpenModalBtn" class="btn" style="background:#10b981;color:#fff;padding:10px 20px;border-radius:10px;font-weight:600;box-shadow:0 6px 16px rgba(16,185,129,0.25);">➕ הוסף מועמד</button>
+                  <button id="userBulkImportBtn" class="btn" style="background:#3b82f6;color:#fff;padding:10px 20px;border-radius:10px;font-weight:600;box-shadow:0 6px 16px rgba(59,130,246,0.25);">📥 העלאה מקובץ</button>
+                  <input id="userSearchInput" type="search" placeholder="חיפוש לפי תעודת זהות או שם" style="flex:1;padding:10px 12px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);min-width:200px;">
+                  <select id="userCompletionFilter" style="padding:10px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);color:var(--text-primary);min-width:140px;">
                     <option value="all">כל המשתמשים</option>
                     <option value="pending">בתהליך</option>
                     <option value="done">סיימו הכל</option>
@@ -369,9 +371,14 @@
                   <div id="userListError" style="padding:16px;text-align:center;font-size:0.85rem;color:#fb7185;display:none;"></div>
                 </div>
               </div>
-              <div class="user-mgmt-form" style="border:2px solid var(--border-color);border-radius:14px;padding:18px;background:var(--bg-secondary);box-shadow:var(--shadow-sm);min-width:0;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                  <h4 id="userFormTitle" style="margin:0;font-size:1rem;">הוסף מועמד חדש</h4>
+            </div>
+            <!-- User Form Modal Overlay -->
+            <div id="userFormModal" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;">
+              <div class="user-modal-backdrop" style="position:absolute;inset:0;"></div>
+              <div class="user-mgmt-form" style="position:relative;width:100%;max-width:600px;border:2px solid var(--border-color);border-radius:18px;padding:22px 26px;background:var(--bg-primary);box-shadow:0 30px 80px rgba(15,23,42,0.55);max-height:90vh;overflow-y:auto;">
+                <button id="userCloseModalBtn" type="button" style="position:absolute;top:14px;left:16px;width:36px;height:36px;border:none;border-radius:50%;background:var(--bg-tertiary);color:var(--text-primary);font-size:1.3rem;cursor:pointer;line-height:1;z-index:10;">×</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;padding-left:50px;">
+                  <h4 id="userFormTitle" style="margin:0;font-size:1.1rem;">הוסף מועמד חדש</h4>
                   <span id="userFormMode" class="pill-small" style="background:var(--bg-tertiary);color:var(--text-secondary);">מצב יצירה</span>
                 </div>
                 <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
@@ -401,6 +408,18 @@
                   </div>
                   <span class="form-hint" style="font-size:0.75rem;color:var(--text-secondary);">שמור את הקוד והזכר לנבחן להזין אותו יחד עם תעודת הזהות בכניסה</span>
                 </div>
+                <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:14px 0;">
+                  <div class="form-group" style="margin:0;">
+                    <label for="userAccessStart">תחילת חלון כניסה</label>
+                    <input id="userAccessStart" type="datetime-local" style="width:100%;padding:12px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);">
+                    <span class="form-hint" style="font-size:0.75rem;color:var(--text-secondary);">השעה המוקדמת ביותר לכניסת המועמד (אפשר להשאיר ריק)</span>
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label for="userAccessEnd">סיום חלון כניסה</label>
+                    <input id="userAccessEnd" type="datetime-local" style="width:100%;padding:12px;border:2px solid var(--border-color);border-radius:10px;background:var(--bg-primary);">
+                    <span class="form-hint" style="font-size:0.75rem;color:var(--text-secondary);">לאחר שעה זו הכניסה תיחסם (אפשר להשאיר ריק)</span>
+                  </div>
+                </div>
                 <label style="display:flex;align-items:center;gap:10px;margin:6px 0 4px;font-weight:600;color:var(--text-primary);">
                   <input type="checkbox" id="userAllDone" style="width:auto;">
                   כל המבחנים הושלמו בהצלחה
@@ -412,6 +431,52 @@
                   <button id="userResetBtn" type="button" class="btn btn-secondary" style="padding:10px 18px;border-radius:10px;">איפוס טופס</button>
                   <button id="userDeleteBtn" type="button" class="btn" style="background:#ef4444;color:#fff;padding:10px 18px;border-radius:10px;display:none;">🗑️ מחק מועמד</button>
                 </div>
+              </div>
+            </div>
+            <!-- Bulk Import Modal -->
+            <div id="userBulkModal" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px;">
+              <div class="bulk-modal-backdrop" style="position:absolute;inset:0;"></div>
+              <div class="bulk-modal-dialog" style="position:relative;width:100%;max-width:800px;border:2px solid var(--border-color);border-radius:18px;padding:22px 26px;background:var(--bg-primary);box-shadow:0 30px 80px rgba(15,23,42,0.55);max-height:90vh;overflow-y:auto;">
+                <button id="bulkCloseModalBtn" type="button" style="position:absolute;top:14px;left:16px;width:36px;height:36px;border:none;border-radius:50%;background:var(--bg-tertiary);color:var(--text-primary);font-size:1.3rem;cursor:pointer;line-height:1;z-index:10;">×</button>
+                <h4 style="margin:0 0 8px;font-size:1.1rem;padding-left:50px;">📥 העלאת מועמדים מקובץ Excel</h4>
+                <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:16px;">הורידו את קובץ הדוגמה, מלאו את פרטי המועמדים ולאחר מכן העלו את הקובץ. המערכת תבצע ולידציה ותציג את התוצאות.</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">
+                  <button id="bulkDownloadTemplateBtn" class="btn btn-secondary" style="padding:10px 20px;border-radius:10px;">⬇️ הורד קובץ דוגמה</button>
+                  <button id="bulkUploadFileBtn" class="btn" style="background:#3b82f6;color:#fff;padding:10px 20px;border-radius:10px;">📂 בחר קובץ להעלאה</button>
+                  <input id="bulkFileInput" type="file" accept=".xlsx,.xls,.csv" style="display:none;">
+                  <span id="bulkFileName" style="font-size:0.8rem;color:var(--text-secondary);align-self:center;"></span>
+                </div>
+                <div id="bulkPreviewSection" style="display:none;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <h5 style="margin:0;font-size:0.95rem;">תצוגה מקדימה</h5>
+                    <span id="bulkValidCount" style="font-size:0.8rem;color:#10b981;"></span>
+                  </div>
+                  <div style="overflow:auto;max-height:280px;border:2px dashed var(--border-color);border-radius:12px;">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;min-width:500px;">
+                      <thead style="background:var(--bg-tertiary);position:sticky;top:0;">
+                        <tr>
+                          <th style="text-align:center;padding:8px;">#</th>
+                          <th style="text-align:right;padding:8px;">שם פרטי</th>
+                          <th style="text-align:right;padding:8px;">שם משפחה</th>
+                          <th style="text-align:center;padding:8px;">תעודת זהות</th>
+                          <th style="text-align:center;padding:8px;">קוד כניסה</th>
+                          <th style="text-align:right;padding:8px;">הערות</th>
+                          <th style="text-align:center;padding:8px;">סטטוס</th>
+                        </tr>
+                      </thead>
+                      <tbody id="bulkPreviewBody"></tbody>
+                    </table>
+                  </div>
+                  <div id="bulkErrorsSection" style="margin-top:12px;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;display:none;">
+                    <div style="font-weight:600;color:#dc2626;margin-bottom:6px;">⚠️ שגיאות שנמצאו:</div>
+                    <ul id="bulkErrorsList" style="margin:0;padding-right:20px;font-size:0.8rem;color:#991b1b;"></ul>
+                  </div>
+                  <div style="display:flex;gap:12px;margin-top:16px;">
+                    <button id="bulkConfirmBtn" class="btn" style="background:#10b981;color:#fff;padding:10px 24px;border-radius:10px;font-weight:600;">✓ אשר והוסף מועמדים</button>
+                    <button id="bulkCancelBtn" class="btn btn-secondary" style="padding:10px 20px;border-radius:10px;">ביטול</button>
+                  </div>
+                </div>
+                <div id="bulkStatus" style="font-size:0.8rem;color:var(--text-secondary);margin-top:12px;"></div>
               </div>
             </div>
           </div>
@@ -1655,6 +1720,8 @@
       const notesInput=section.querySelector('#userNotes');
       const pinInput=section.querySelector('#userEntryPin');
       const pinRegenBtn=section.querySelector('#userPinRegenBtn');
+      const accessStartInput=section.querySelector('#userAccessStart');
+      const accessEndInput=section.querySelector('#userAccessEnd');
       const allDoneInput=section.querySelector('#userAllDone');
       const testsMetaEl=section.querySelector('#userTestsMeta');
       const saveBtn=section.querySelector('#userSaveBtn');
@@ -1663,6 +1730,10 @@
       const formStatus=section.querySelector('#userFormStatus');
       const formTitle=section.querySelector('#userFormTitle');
       const formMode=section.querySelector('#userFormMode');
+      const openModalBtn=section.querySelector('#userOpenModalBtn');
+      const closeModalBtn=section.querySelector('#userCloseModalBtn');
+      const formModal=section.querySelector('#userFormModal');
+      const modalBackdrop=formModal? formModal.querySelector('.user-modal-backdrop') : null;
       if(!listBody || !nationalIdInput) return;
 
       let usersCache=[];
@@ -1671,6 +1742,10 @@
       let completionValue='all';
       let debounceTimer=null;
       let pendingPin='';
+      let formDirty=false;
+
+      function markDirty(){ formDirty=true; }
+      function clearDirty(){ formDirty=false; }
 
       function generateEntryPin(){
         return String(Math.floor(Math.random()*10000)).padStart(4,'0');
@@ -1757,6 +1832,45 @@
         if(scores.length){ parts.push(`קיימים ציונים ל-${scores.length} מבחנים`); }
         return parts.join(' | ');
       }
+      function formatDateTimeLabel(iso){
+        if(!iso) return '';
+        try{
+          return new Date(iso).toLocaleString('he-IL', { dateStyle:'short', timeStyle:'short' });
+        }catch(e){ return ''; }
+      }
+      function toDatetimeInputValue(iso){
+        if(!iso) return '';
+        try{
+          const date=new Date(iso);
+          if(Number.isNaN(date.getTime())) return '';
+          const pad=n=> String(n).padStart(2,'0');
+          return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        }catch(err){ return ''; }
+      }
+      function fromDatetimeInputValue(value){
+        if(!value) return null;
+        const date=new Date(value);
+        if(Number.isNaN(date.getTime())) return null;
+        return date.toISOString();
+      }
+      function describeAccessWindow(user){
+        const startLabel = formatDateTimeLabel(user.access_window_start);
+        const endLabel = formatDateTimeLabel(user.access_window_end);
+        if(!startLabel && !endLabel) return '';
+        if(startLabel && endLabel) return `${startLabel} - ${endLabel}`;
+        return startLabel? `מתחיל ב-${startLabel}` : `פתוח עד ${endLabel}`;
+      }
+      function openModal(){
+        if(formModal) formModal.style.display='flex';
+      }
+      function closeModal(force){
+        if(!force && formDirty){
+          const confirmed=confirm('יש שינויים שלא נשמרו. האם לסגור בכל זאת?');
+          if(!confirmed) return;
+        }
+        if(formModal) formModal.style.display='none';
+        clearForm();
+      }
       function setLoading(state){
         if(loadingEl) loadingEl.style.display=state? 'block':'none';
         if(state && emptyEl) emptyEl.style.display='none';
@@ -1797,10 +1911,13 @@
         lastNameInput && (lastNameInput.value='');
         nationalIdInput.value='';
         if(notesInput) notesInput.value='';
+        if(accessStartInput) accessStartInput.value='';
+        if(accessEndInput) accessEndInput.value='';
         if(allDoneInput) allDoneInput.checked=false;
         if(testsMetaEl) testsMetaEl.textContent='לא בוצעו ניסיונות עדיין';
         setPin(generateEntryPin());
         updateFormMode();
+        clearDirty();
       }
       function populateForm(user){
         currentEdit=user;
@@ -1808,6 +1925,8 @@
         lastNameInput && (lastNameInput.value=user.last_name||'');
         nationalIdInput.value=user.national_id||'';
         if(notesInput) notesInput.value=user.notes||'';
+        if(accessStartInput) accessStartInput.value=toDatetimeInputValue(user.access_window_start);
+        if(accessEndInput) accessEndInput.value=toDatetimeInputValue(user.access_window_end);
         if(allDoneInput) allDoneInput.checked=!!user.all_tests_done;
         if(testsMetaEl) testsMetaEl.textContent=describeTestsMeta(user);
         setPin(user.entry_pin||'');
@@ -1824,11 +1943,13 @@
         setEmpty(false);
         listBody.innerHTML=usersCache.map(user=>{
           const completion=describeCompletion(user);
+          const windowLabel=describeAccessWindow(user);
           return `
             <tr data-user-id="${escapeHtml(user.id)}">
               <td style="padding:10px 12px;">
                 <div style="font-weight:600;font-size:0.95rem;color:var(--text-primary);">${escapeHtml(getDisplayName(user))}</div>
                 <div style="font-size:0.75rem;color:var(--text-secondary);">${escapeHtml(user.notes||'')}</div>
+                ${windowLabel? `<div style="font-size:0.72rem;color:#0f172a;margin-top:4px;">⏱ חלון כניסה: ${escapeHtml(windowLabel)}</div>`:''}
               </td>
               <td style="text-align:center;padding:10px 12px;font-weight:600;color:var(--text-primary);">${escapeHtml(user.national_id||'-')}</td>
               <td style="text-align:center;padding:10px 12px;font-family:'Courier New',monospace;font-weight:600;letter-spacing:0.2em;">${escapeHtml((user.entry_pin||'').padStart(4,'0'))}</td>
@@ -1866,13 +1987,21 @@
         }
       }
       async function handleSave(){
+        const accessStartIso = accessStartInput? fromDatetimeInputValue(accessStartInput.value) : null;
+        const accessEndIso = accessEndInput? fromDatetimeInputValue(accessEndInput.value) : null;
+        if(accessStartIso && accessEndIso && new Date(accessStartIso) >= new Date(accessEndIso)){
+          setFormStatus('שעת הסיום חייבת להיות אחרי שעת ההתחלה', 'error');
+          return;
+        }
         const payload={
           national_id:(nationalIdInput.value||'').trim(),
           first_name:firstNameInput? (firstNameInput.value||'').trim() : '',
           last_name:lastNameInput? (lastNameInput.value||'').trim() : '',
           notes:notesInput? (notesInput.value||'').trim() : '',
           all_tests_done:allDoneInput? !!allDoneInput.checked : false,
-          entry_pin:pendingPin
+          entry_pin:pendingPin,
+          access_window_start: accessStartIso,
+          access_window_end: accessEndIso
         };
         if(!payload.national_id){
           setFormStatus('חובה להזין תעודת זהות', 'error');
@@ -1897,8 +2026,9 @@
             await window.examData.createUser(payload);
             setFormStatus('✓ המועמד נוצר בהצלחה', 'success');
           }
-          clearForm();
           await loadUsers();
+          clearDirty();
+          setTimeout(()=>closeModal(true), 600);
         }catch(err){
           console.warn('[settings] save user failed', err);
           if(err && (err.code==='23505' || (err.message && err.message.includes('entry_pin')))){
@@ -1940,6 +2070,7 @@
             if(user){
               populateForm(user);
               setFormStatus('בעריכת מועמד קיים', 'muted');
+              openModal();
             }
           }
         });
@@ -1964,6 +2095,402 @@
       if(saveBtn) saveBtn.onclick=handleSave;
         if(deleteBtn) deleteBtn.onclick=handleDelete;
         if(pinRegenBtn) pinRegenBtn.onclick=regenPin;
+      if(openModalBtn) openModalBtn.onclick=()=>{ clearForm(); openModal(); };
+      if(closeModalBtn) closeModalBtn.onclick=()=>closeModal();
+      if(modalBackdrop) modalBackdrop.onclick=()=>closeModal();
+
+      // Attach input listeners to mark form as dirty
+      const dirtyInputs=[firstNameInput,lastNameInput,nationalIdInput,notesInput,accessStartInput,accessEndInput];
+      dirtyInputs.forEach(inp=>{ if(inp) inp.addEventListener('input', markDirty); });
+      if(allDoneInput) allDoneInput.addEventListener('change', markDirty);
+      if(pinRegenBtn) pinRegenBtn.addEventListener('click', markDirty);
+
+      // ===== Bulk Import Logic =====
+      const bulkImportBtn=section.querySelector('#userBulkImportBtn');
+      const bulkModal=section.querySelector('#userBulkModal');
+      const bulkModalBackdrop=bulkModal? bulkModal.querySelector('.bulk-modal-backdrop') : null;
+      const bulkCloseBtn=section.querySelector('#bulkCloseModalBtn');
+      const bulkDownloadBtn=section.querySelector('#bulkDownloadTemplateBtn');
+      const bulkUploadBtn=section.querySelector('#bulkUploadFileBtn');
+      const bulkFileInput=section.querySelector('#bulkFileInput');
+      const bulkFileName=section.querySelector('#bulkFileName');
+      const bulkPreviewSection=section.querySelector('#bulkPreviewSection');
+      const bulkPreviewBody=section.querySelector('#bulkPreviewBody');
+      const bulkValidCount=section.querySelector('#bulkValidCount');
+      const bulkErrorsSection=section.querySelector('#bulkErrorsSection');
+      const bulkErrorsList=section.querySelector('#bulkErrorsList');
+      const bulkConfirmBtn=section.querySelector('#bulkConfirmBtn');
+      const bulkCancelBtn=section.querySelector('#bulkCancelBtn');
+      const bulkStatus=section.querySelector('#bulkStatus');
+
+      let bulkParsedRows=[];
+      let bulkValidRows=[];
+      let bulkErrors=[];
+
+      function openBulkModal(){
+        if(bulkModal) bulkModal.style.display='flex';
+        resetBulkState();
+      }
+      function closeBulkModal(){
+        if(bulkModal) bulkModal.style.display='none';
+        resetBulkState();
+      }
+      function resetBulkState(){
+        bulkParsedRows=[];
+        bulkValidRows=[];
+        bulkErrors=[];
+        if(bulkFileName) bulkFileName.textContent='';
+        if(bulkPreviewSection) bulkPreviewSection.style.display='none';
+        if(bulkPreviewBody) bulkPreviewBody.innerHTML='';
+        if(bulkErrorsSection) bulkErrorsSection.style.display='none';
+        if(bulkErrorsList) bulkErrorsList.innerHTML='';
+        if(bulkValidCount) bulkValidCount.textContent='';
+        if(bulkStatus) bulkStatus.textContent='';
+        if(bulkFileInput) bulkFileInput.value='';
+      }
+      function setBulkStatus(text, tone){
+        if(!bulkStatus) return;
+        const colors={ success:'#10b981', error:'#ef4444', pending:'#f59e0b', muted:'#94a3b8' };
+        bulkStatus.textContent=text||'';
+        bulkStatus.style.color=colors[tone]||colors.muted;
+      }
+
+      function downloadTemplate(){
+        // Create Excel template using SheetJS
+        if(typeof XLSX==='undefined'){
+          setBulkStatus('ספריית Excel לא נטענה', 'error');
+          return;
+        }
+        // Headers in Hebrew for clarity - added מס' (row number) column
+        const headers=['מס\'','שם פרטי','שם משפחה','תעודת זהות','הערות','תחילת גישה (DD/MM/YYYY HH:MM)','סיום גישה (DD/MM/YYYY HH:MM)'];
+        // Example rows with clear format
+        const data=[
+          headers,
+          [1,'ישראל','ישראלי','123456789','הערות לדוגמה','03/12/2025 08:00','03/12/2025 18:00'],
+          [2,'משה','כהן','987654321','','',''],
+          [3,'שרה','לוי','555666777','מועמד מיוחד','04/12/2025 09:00','04/12/2025 17:00']
+        ];
+        const ws=XLSX.utils.aoa_to_sheet(data);
+        // Set column widths for better readability
+        ws['!cols']=[
+          { wch:6 },  // מס'
+          { wch:14 }, // שם פרטי
+          { wch:14 }, // שם משפחה
+          { wch:12 }, // תעודת זהות
+          { wch:20 }, // הערות
+          { wch:26 }, // תחילת גישה
+          { wch:26 }  // סיום גישה
+        ];
+        const wb=XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'מועמדים');
+        XLSX.writeFile(wb, 'תבנית_העלאת_משתמשים.xlsx');
+        setBulkStatus('קובץ הדוגמה הורד בהצלחה', 'success');
+      }
+
+      // Map Hebrew headers to internal field names
+      const headerMapping={
+        'מס\'':'row_num',
+        'שם פרטי':'first_name',
+        'שם משפחה':'last_name',
+        'תעודת זהות':'national_id',
+        'הערות':'notes',
+        'תחילת גישה (dd/mm/yyyy hh:mm)':'access_window_start',
+        'סיום גישה (dd/mm/yyyy hh:mm)':'access_window_end',
+        // Also support original English headers
+        'row_num':'row_num',
+        'first_name':'first_name',
+        'last_name':'last_name',
+        'national_id':'national_id',
+        'notes':'notes',
+        'access_window_start':'access_window_start',
+        'access_window_end':'access_window_end'
+      };
+
+      // Parse various date/time formats to ISO format for database
+      function parseDateTimeInput(val){
+        if(val===null || val===undefined || val==='') return null;
+        // If it's already a Date object (from Excel)
+        if(val instanceof Date){
+          if(!isNaN(val.getTime())){
+            return val.toISOString();
+          }
+          return null;
+        }
+        // Convert to string and trim
+        let str=String(val).trim();
+        if(!str) return null;
+        // Try DD/MM/YYYY HH:MM format
+        const match=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
+        if(match){
+          const [,day,month,year,hour,minute]=match;
+          const d=new Date(parseInt(year),parseInt(month)-1,parseInt(day),parseInt(hour),parseInt(minute));
+          if(!isNaN(d.getTime())){
+            return d.toISOString();
+          }
+        }
+        // Try DD/MM/YYYY format (without time)
+        const dateOnlyMatch=str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if(dateOnlyMatch){
+          const [,day,month,year]=dateOnlyMatch;
+          const d=new Date(parseInt(year),parseInt(month)-1,parseInt(day),0,0);
+          if(!isNaN(d.getTime())){
+            return d.toISOString();
+          }
+        }
+        // Fallback: try direct parse (handles ISO and other formats)
+        const isoDate=new Date(str);
+        if(!isNaN(isoDate.getTime())){
+          return isoDate.toISOString();
+        }
+        return null;
+      }
+
+      // Convert cell value to string, handling numbers, dates, etc.
+      function cellToString(val){
+        if(val===null || val===undefined) return '';
+        if(val instanceof Date){
+          // Format Date to DD/MM/YYYY HH:MM
+          const d=val;
+          const day=String(d.getDate()).padStart(2,'0');
+          const month=String(d.getMonth()+1).padStart(2,'0');
+          const year=d.getFullYear();
+          const hour=String(d.getHours()).padStart(2,'0');
+          const minute=String(d.getMinutes()).padStart(2,'0');
+          return `${day}/${month}/${year} ${hour}:${minute}`;
+        }
+        return String(val).trim();
+      }
+
+      // Parse Excel file using SheetJS
+      function parseExcel(arrayBuffer){
+        if(typeof XLSX==='undefined'){
+          throw new Error('ספריית Excel לא נטענה');
+        }
+        const workbook=XLSX.read(arrayBuffer, { type:'array', cellDates:true });
+        const sheetName=workbook.SheetNames[0];
+        const sheet=workbook.Sheets[sheetName];
+        // Get data as array of arrays, with raw values
+        const data=XLSX.utils.sheet_to_json(sheet, { header:1, raw:false, dateNF:'DD/MM/YYYY HH:MM' });
+        if(data.length<2) return [];
+        // First row is headers
+        const rawHeaders=data[0].map(h=>cellToString(h).toLowerCase());
+        const headers=rawHeaders.map(h=>{
+          if(headerMapping[h]) return headerMapping[h];
+          if(h.includes('מס')) return 'row_num';
+          if(h.includes('תחילת גישה')) return 'access_window_start';
+          if(h.includes('סיום גישה')) return 'access_window_end';
+          return h;
+        });
+        const rows=[];
+        for(let i=1;i<data.length;i++){
+          const rowData=data[i];
+          if(!rowData || !rowData.length) continue;
+          const row={};
+          headers.forEach((h,idx)=>{
+            row[h]=cellToString(rowData[idx]);
+          });
+          // Only include rows that have a row number (מס')
+          const rowNum=row.row_num;
+          if(rowNum && String(rowNum).trim()!==''){
+            row._line=i+1;
+            rows.push(row);
+          }
+        }
+        return rows;
+      }
+
+      function parseCSV(text){
+        const lines=text.split(/\r?\n/).filter(line=>line.trim());
+        if(lines.length<2) return [];
+        const headerLine=lines[0].replace(/^\uFEFF/,'');
+        const rawHeaders=headerLine.split(',').map(h=>h.trim().toLowerCase());
+        // Map headers to internal names
+        const headers=rawHeaders.map(h=>{
+          // Try exact match first, then check common variations
+          if(headerMapping[h]) return headerMapping[h];
+          if(h.includes('מס')) return 'row_num';
+          // Handle date headers with any case variation
+          if(h.includes('תחילת גישה')) return 'access_window_start';
+          if(h.includes('סיום גישה')) return 'access_window_end';
+          return h;
+        });
+        const rows=[];
+        for(let i=1;i<lines.length;i++){
+          const values=lines[i].split(',');
+          const row={};
+          headers.forEach((h,idx)=>{ row[h]=values[idx]? values[idx].trim() : ''; });
+          // Only include rows that have a row number (מס')
+          const rowNum=row.row_num;
+          if(rowNum && String(rowNum).trim()!==''){
+            row._line=i+1;
+            rows.push(row);
+          }
+        }
+        return rows;
+      }
+
+      function validateRows(rows){
+        const valid=[];
+        const errors=[];
+        const seenIds=new Set();
+        rows.forEach((row,idx)=>{
+          const rowNum=row._line||idx+2;
+          const nationalId=(row.national_id||'').trim();
+          const firstName=(row.first_name||'').trim();
+          const lastName=(row.last_name||'').trim();
+          const accessStart=(row.access_window_start||'').trim();
+          const accessEnd=(row.access_window_end||'').trim();
+          const rowErrors=[];
+          if(!nationalId){
+            rowErrors.push('חסרה תעודת זהות');
+          } else if(!/^\d{5,9}$/.test(nationalId)){
+            rowErrors.push('תעודת זהות לא תקינה (נדרשות 5-9 ספרות)');
+          } else if(seenIds.has(nationalId)){
+            rowErrors.push('תעודת זהות כפולה בקובץ');
+          }
+          if(nationalId) seenIds.add(nationalId);
+          if(!firstName && !lastName){
+            rowErrors.push('חסר שם');
+          }
+          // Validate date formats if provided
+          let parsedStart=null, parsedEnd=null;
+          if(accessStart){
+            parsedStart=parseDateTimeInput(accessStart);
+            if(!parsedStart){
+              rowErrors.push('פורמט תחילת גישה לא תקין (נדרש: DD/MM/YYYY HH:MM)');
+            }
+          }
+          if(accessEnd){
+            parsedEnd=parseDateTimeInput(accessEnd);
+            if(!parsedEnd){
+              rowErrors.push('פורמט סיום גישה לא תקין (נדרש: DD/MM/YYYY HH:MM)');
+            }
+          }
+          if(rowErrors.length){
+            errors.push({ row:rowNum, issues:rowErrors });
+          } else {
+            valid.push({
+              first_name:firstName,
+              last_name:lastName,
+              national_id:nationalId,
+              notes:(row.notes||'').trim(),
+              access_window_start:parsedStart,
+              access_window_end:parsedEnd,
+              entry_pin:generateEntryPin()
+            });
+          }
+        });
+        return { valid, errors };
+      }
+
+      function renderBulkPreview(){
+        if(!bulkPreviewBody) return;
+        bulkPreviewBody.innerHTML=bulkValidRows.map((row,i)=>`
+          <tr>
+            <td style=\"text-align:center;padding:6px 8px;\">${i+1}</td>
+            <td style=\"padding:6px 8px;\">${escapeHtml(row.first_name)}</td>
+            <td style=\"padding:6px 8px;\">${escapeHtml(row.last_name)}</td>
+            <td style=\"text-align:center;padding:6px 8px;font-weight:600;\">${escapeHtml(row.national_id)}</td>
+            <td style=\"text-align:center;padding:6px 8px;font-family:monospace;\">${escapeHtml(row.entry_pin)}</td>
+            <td style=\"padding:6px 8px;font-size:0.75rem;color:var(--text-secondary);\">${escapeHtml(row.notes||'-')}</td>
+            <td style=\"text-align:center;padding:6px 8px;\"><span style=\"background:#d1fae5;color:#065f46;padding:2px 8px;border-radius:6px;font-size:0.7rem;\">תקין</span></td>
+          </tr>
+        `).join('');
+        if(bulkValidCount) bulkValidCount.textContent=bulkValidRows.length+' מועמדים תקינים';
+        if(bulkPreviewSection) bulkPreviewSection.style.display='block';
+        if(bulkErrors.length){
+          if(bulkErrorsSection) bulkErrorsSection.style.display='block';
+          if(bulkErrorsList) bulkErrorsList.innerHTML=bulkErrors.map(e=>`<li>שורה ${e.row}: ${e.issues.join(', ')}</li>`).join('');
+        } else {
+          if(bulkErrorsSection) bulkErrorsSection.style.display='none';
+        }
+      }
+
+      async function handleFileUpload(file){
+        if(!file) return;
+        setBulkStatus('קורא קובץ...', 'pending');
+        if(bulkFileName) bulkFileName.textContent=file.name;
+        try{
+          const fileName=file.name.toLowerCase();
+          const isExcel=fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+          
+          if(isExcel){
+            // Read Excel file
+            const arrayBuffer=await file.arrayBuffer();
+            bulkParsedRows=parseExcel(arrayBuffer);
+          } else {
+            // Read CSV file
+            const text=await file.text();
+            bulkParsedRows=parseCSV(text);
+          }
+          
+          if(!bulkParsedRows.length){
+            setBulkStatus('הקובץ ריק או לא נמצאו שורות עם מספר סידורי. ודא שמילאת את עמודת "מס\'" עבור כל שורה.', 'error');
+            return;
+          }
+          const result=validateRows(bulkParsedRows);
+          bulkValidRows=result.valid;
+          bulkErrors=result.errors;
+          if(!bulkValidRows.length){
+            setBulkStatus('לא נמצאו שורות תקינות בקובץ', 'error');
+            if(bulkErrors.length){
+              if(bulkErrorsSection) bulkErrorsSection.style.display='block';
+              if(bulkErrorsList) bulkErrorsList.innerHTML=bulkErrors.map(e=>`<li>שורה ${e.row}: ${e.issues.join(', ')}</li>`).join('');
+            }
+            return;
+          }
+          renderBulkPreview();
+          setBulkStatus('נמצאו '+bulkValidRows.length+' מועמדים תקינים'+(bulkErrors.length? ' ('+bulkErrors.length+' שגיאות)':''), bulkErrors.length?'pending':'success');
+        }catch(err){
+          console.error('[bulk] file read error', err);
+          setBulkStatus('שגיאה בקריאת הקובץ: '+(err.message||''), 'error');
+        }
+      }
+
+      async function confirmBulkImport(){
+        if(!bulkValidRows.length){
+          setBulkStatus('אין מועמדים להוספה', 'error');
+          return;
+        }
+        if(!window.examData || typeof window.examData.createUser!=='function'){
+          setBulkStatus('מודול הנתונים אינו זמין', 'error');
+          return;
+        }
+        setBulkStatus('מוסיף '+bulkValidRows.length+' מועמדים...', 'pending');
+        if(bulkConfirmBtn) bulkConfirmBtn.disabled=true;
+        let successCount=0;
+        let failCount=0;
+        const failedRows=[];
+        for(const row of bulkValidRows){
+          try{
+            await window.examData.createUser(row);
+            successCount++;
+          }catch(err){
+            failCount++;
+            failedRows.push({ national_id:row.national_id, error:err && err.message? err.message:'שגיאה' });
+          }
+        }
+        if(bulkConfirmBtn) bulkConfirmBtn.disabled=false;
+        if(failCount===0){
+          setBulkStatus('✓ כל '+successCount+' המועמדים נוספו בהצלחה!', 'success');
+          await loadUsers();
+          setTimeout(closeBulkModal, 1200);
+        } else {
+          setBulkStatus('נוספו '+successCount+' מועמדים, '+failCount+' נכשלו', 'error');
+          if(bulkErrorsSection) bulkErrorsSection.style.display='block';
+          if(bulkErrorsList) bulkErrorsList.innerHTML+=failedRows.map(f=>`<li>ת.ז. ${f.national_id}: ${f.error}</li>`).join('');
+          await loadUsers();
+        }
+      }
+
+      if(bulkImportBtn) bulkImportBtn.onclick=openBulkModal;
+      if(bulkCloseBtn) bulkCloseBtn.onclick=closeBulkModal;
+      if(bulkModalBackdrop) bulkModalBackdrop.onclick=closeBulkModal;
+      if(bulkDownloadBtn) bulkDownloadBtn.onclick=downloadTemplate;
+      if(bulkUploadBtn) bulkUploadBtn.onclick=()=>{ if(bulkFileInput) bulkFileInput.click(); };
+      if(bulkFileInput) bulkFileInput.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) handleFileUpload(f); };
+      if(bulkConfirmBtn) bulkConfirmBtn.onclick=confirmBulkImport;
+      if(bulkCancelBtn) bulkCancelBtn.onclick=closeBulkModal;
 
       updateFormMode();
       clearForm();

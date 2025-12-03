@@ -591,26 +591,28 @@ header h1 {
 }
 
 /* ===== OVERRIDES: Reaction Screen Absolute Center ===== */
-#reaction-screen .test-view { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:calc(100vh - 40px); }
+#reaction-screen .test-view { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; min-height:calc(100vh - 40px); padding-top:120px !important; }
 #reaction-screen .test-area { max-width:none !important; width:100vw; margin:0 !important; padding:0 !important; display:flex; align-items:center; justify-content:center; }
-#reaction-screen .reaction-layout { width:100%; display:flex; align-items:center; justify-content:center; padding:0; min-height:inherit; }
+#reaction-screen .reaction-layout { width:100%; display:flex; align-items:center; justify-content:center; padding:0; min-height:auto; }
 #reaction-screen #reaction-area { margin:0 !important; }
+#reaction-screen .pretest-actions { margin-top:0 !important; margin-bottom:12px; }
 /* קטנים: התאמה למסכים צרים */
 @media (max-width:900px){
+  #reaction-screen .test-view { padding-top:110px !important; }
   #reaction-screen .test-area { width:100vw; }
-  #reaction-screen .reaction-layout .reaction-area { width:95vw; height:70vh; }
+  #reaction-screen .reaction-layout .reaction-area { width:95vw; height:55vh; }
 }
 
 /* FINAL CENTER FIX FOR REACTION TEST */
-#reaction-screen .test-view { padding:0 !important; }
-#reaction-screen .test-area.reaction-layout { width:100%; max-width:1100px; height:80vh; margin:0 auto !important; padding:0 !important; display:flex; align-items:center; justify-content:center; }
+#reaction-screen .test-view { padding-left:0 !important; padding-right:0 !important; }
+#reaction-screen .test-area.reaction-layout { width:100%; max-width:1100px; height:65vh; margin:0 auto !important; padding:0 !important; display:flex; align-items:center; justify-content:center; }
 #reaction-screen #reaction-area { margin:0 !important; display:flex; align-items:center; justify-content:center; }
 #reaction-screen .reaction-area { margin:0 !important; }
 /* RTL safeguard: center using logical margins */
 #reaction-screen .test-area.reaction-layout { margin-inline-start:auto !important; margin-inline-end:auto !important; }
 /* Small screens */
 @media (max-width:900px){
-  #reaction-screen .test-area.reaction-layout { height:70vh; }
+  #reaction-screen .test-area.reaction-layout { height:60vh; }
 }
 
 /* ===== MEMORY TEST ===== */
@@ -994,6 +996,21 @@ header h1 {
     font-size: 1rem;
     font-family: inherit;
     transition: all 0.2s ease;
+}
+
+.form-group input[type="datetime-local"] {
+    color-scheme: light;
+}
+
+body.dark-mode .form-group input[type="datetime-local"] {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    color-scheme: dark;
+}
+
+body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.9);
+    opacity: 0.9;
 }
 
 .form-group input:focus,
@@ -1813,6 +1830,51 @@ header h1 {
     font-size: 1rem;
     font-weight: 600;
     color: #f1f5f9;
+}
+
+/* Global Practice Banner Mode Variations */
+.global-practice-banner[data-mode="practice"] {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.9));
+    border-color: rgba(52, 211, 153, 0.7);
+}
+.global-practice-banner[data-mode="practice"] .practice-banner-label {
+    color: #ecfdf5;
+}
+.global-practice-banner[data-mode="practice"] .practice-banner-sub {
+    color: #d1fae5;
+}
+
+.global-practice-banner[data-mode="countdown"] {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.9));
+    border-color: rgba(96, 165, 250, 0.7);
+}
+.global-practice-banner[data-mode="countdown"] .practice-banner-label {
+    color: #eff6ff;
+}
+.global-practice-banner[data-mode="countdown"] .practice-banner-sub {
+    color: #dbeafe;
+}
+
+.global-practice-banner[data-mode="real"] {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(217, 119, 6, 0.9));
+    border-color: rgba(251, 191, 36, 0.7);
+}
+.global-practice-banner[data-mode="real"] .practice-banner-label {
+    color: #fffbeb;
+}
+.global-practice-banner[data-mode="real"] .practice-banner-sub {
+    color: #fef3c7;
+}
+
+.global-practice-banner[data-mode="done"] {
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.95), rgba(75, 85, 99, 0.9));
+    border-color: rgba(156, 163, 175, 0.7);
+}
+.global-practice-banner[data-mode="done"] .practice-banner-label {
+    color: #f9fafb;
+}
+.global-practice-banner[data-mode="done"] .practice-banner-sub {
+    color: #e5e7eb;
 }
 
 /* ===== LOGIN SCREEN ===== */

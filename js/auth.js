@@ -27,9 +27,21 @@
     }
     function selectFirstAvailable(){
         refreshTestOrder();
-        const first = testOrder[0];
-        if(!isAdmin && first){
-            if(window.switchTest) window.switchTest(first);
+        // מצא את המבחן הבא שעדיין לא הושלם (המשך מאיפה שעצר)
+        let nextTest = null;
+        for(let i = 0; i < testOrder.length; i++){
+            const testId = testOrder[i];
+            if(!completedTests.has(testId)){
+                nextTest = testId;
+                break;
+            }
+        }
+        // אם כל המבחנים הושלמו, אל תעשה כלום (המשתמש סיים)
+        if(!isAdmin && nextTest){
+            console.log('[auth] selectFirstAvailable: next test is', nextTest, 'completed:', [...completedTests]);
+            if(window.switchTest) window.switchTest(nextTest);
+        } else if(!isAdmin && !nextTest && testOrder.length > 0){
+            console.log('[auth] selectFirstAvailable: all tests completed');
         }
     }
 
@@ -61,6 +73,37 @@
     }
     function validatePin(pin){
         return /^\d{4}$/.test(pin||'');
+    }
+    function formatHebrewDateTime(iso){
+        if(!iso) return '';
+        try {
+            return new Date(iso).toLocaleString('he-IL', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+        } catch(err){
+            return iso;
+        }
+    }
+    function buildAccessRestrictionMessage(startIso, endIso, state){
+        const startLabel = formatHebrewDateTime(startIso);
+        const endLabel = formatHebrewDateTime(endIso);
+        if(state === 'before'){
+            if(startLabel && endLabel){
+                return `חלון הכניסה טרם החל. ניתן להתחבר בין ${startLabel} ל-${endLabel}.`;
+            }
+            if(startLabel){
+                return `חלון הכניסה טרם החל. ניתן להתחבר החל מ-${startLabel}.`;
+            }
+            return 'חלון הכניסה טרם החל.';
+        }
+        if(state === 'after'){
+            if(startLabel && endLabel){
+                return `חלון הכניסה הסתיים. ניתן היה להתחבר בין ${startLabel} ל-${endLabel}.`;
+            }
+            if(endLabel){
+                return `חלון הכניסה הסתיים ב-${endLabel}. פנה למנהל להארכת מועד.`;
+            }
+            return 'חלון הכניסה הסתיים.';
+        }
+        return '';
     }
     
     async function login(id, pin) {
@@ -109,20 +152,38 @@
             refreshTestOrder();
             return true;
         }
-        const record = await service.fetchUserByIdentifier(trimmed);
-        if(!record){
-            throw new Error('המשתמש לא נמצא במערכת');
-        }
-        if(!record.entry_pin){
-            throw new Error('למשתמש זה לא הוגדר קוד כניסה – פנה למנהל');
-        }
-        if(record.entry_pin !== trimmedPin){
-            throw new Error('קוד הכניסה שגוי');
+        
+        // חיפוש משתמש לפי שילוב תעודת זהות + קוד כניסה (תומך במספר רישומים לאותה ת.ז.)
+        let record = null;
+        if(typeof service.fetchUserByCredentials === 'function'){
+            record = await service.fetchUserByCredentials(trimmed, trimmedPin);
         }
         
+        if(!record){
+            // בדוק אם תעודת הזהות קיימת בכלל (לצורך הודעת שגיאה מתאימה)
+            const anyUser = await service.fetchUserByIdentifier(trimmed);
+            if(anyUser){
+                throw new Error('קוד הכניסה שגוי');
+            } else {
+                throw new Error('המשתמש לא נמצא במערכת');
+            }
+        }
+        
+        const windowStart = record.access_window_start ? new Date(record.access_window_start) : null;
+        const windowEnd = record.access_window_end ? new Date(record.access_window_end) : null;
+        const startMs = windowStart && !Number.isNaN(windowStart.getTime()) ? windowStart.getTime() : null;
+        const endMs = windowEnd && !Number.isNaN(windowEnd.getTime()) ? windowEnd.getTime() : null;
+        const nowMs = Date.now();
+        if(startMs && nowMs < startMs){
+            throw new Error(buildAccessRestrictionMessage(record.access_window_start, record.access_window_end, 'before'));
+        }
+        if(endMs && nowMs > endMs){
+            throw new Error(buildAccessRestrictionMessage(record.access_window_start, record.access_window_end, 'after'));
+        }
+
         // בדוק האם המשתמש כבר סיים את כל המבחנים
         if(record.all_tests_done === true){
-            throw new Error('סיימת כבר את כל המבחנים. לא ניתן להכנס שוב למערכת.');
+            throw new Error('סיימת כבר את כל המבחנים עם קוד זה. לקבלת קוד חדש פנה למנהל.');
         }
         
         const fullName = [record.first_name, record.last_name].filter(Boolean).join(' ').trim();
@@ -225,8 +286,10 @@
         if (isAdmin) {
             buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('locked'); });
             const adminBtn = document.getElementById('admin-button'); if (adminBtn) adminBtn.style.display = 'block';
+            const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='block';
             return;
         }
+        const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='none';
         let highest = -1; completedTests.forEach(t=>{ const idx=testOrder.indexOf((t||'').trim()); if(idx>highest) highest=idx; });
         console.log('[auth] completedTests=', [...completedTests], 'highestIdx=', highest, 'order=', testOrder);
         buttons.forEach(btn => {
@@ -378,6 +441,8 @@
                 logout(); showLoginScreen();
                 // במקום לכפות eyehand – מנקה מצבים
                 const navButtons = document.querySelectorAll('.nav-btn'); navButtons.forEach(btn => { btn.disabled = true; btn.classList.add('locked'); });
+                const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='none';
+                if(window.scoresView && typeof window.scoresView.close === 'function') window.scoresView.close();
                 applyBodyMode(); hideUserStatsIfNeeded();
             }
         });
@@ -412,11 +477,55 @@
                 catch(e){ completedTests = new Set(); }
             }
             hideLoginScreen(); refreshTestOrder(); updateTestButtons(); hideUserStatsIfNeeded(); applyBodyMode();
-            if(!isAdmin) selectFirstAvailable();
+            
+            // רענן את המבחנים שהושלמו מהדאטאבייס (למקרה שהשתנו)
+            if(!isAdmin && savedUuid){
+                refreshCompletedTestsFromDb(savedUuid).then(()=>{
+                    updateTestButtons();
+                    selectFirstAvailable();
+                });
+            } else if(!isAdmin) {
+                selectFirstAvailable();
+            }
         } else { showLoginScreen(); }
         
         setupLoginForm();
         setupLogoutButton();
+    }
+    
+    // פונקציה פנימית לרענון מבחנים שהושלמו מהדאטאבייס
+    async function refreshCompletedTestsFromDb(userId){
+        if(!userId) return;
+        const service = window.examData;
+        if(!service) return;
+        
+        // המתן שה-Supabase יהיה מוכן
+        const isReady = typeof service.isReady === 'function' ? service.isReady() : true;
+        if(!isReady){
+            console.log('[auth] Supabase not ready, skipping refresh');
+            return;
+        }
+        
+        try {
+            // טען את ה-attempts של המשתמש מהדאטאבייס
+            if(typeof service.fetchUserAttempts === 'function'){
+                const attempts = await service.fetchUserAttempts(userId);
+                attempts.forEach(att=>{
+                    if(!att || !att.test_id) return;
+                    completedTests.add(att.test_id);
+                    const idx = att.attempt_index || 1;
+                    attemptCounts[att.test_id] = Math.max(attemptCounts[att.test_id] || 0, idx);
+                    if(typeof att.scaled_score === 'number'){
+                        testScores = testScores.filter(s=>s.id!==att.test_id);
+                        testScores.push({ id: att.test_id, score: att.scaled_score });
+                    }
+                });
+                console.log('[auth] Refreshed completed tests from DB:', [...completedTests]);
+                persistSession();
+            }
+        } catch(err){
+            console.warn('[auth] refreshCompletedTestsFromDb failed', err);
+        }
     }
     
     // חשיפת API גלובלי

@@ -3,6 +3,13 @@
 (function(){
   if(!window.supabaseClient){ console.warn('[orientation-sync] Supabase client missing'); }
   const BUCKET = 'orientation';
+  const ORIENTATION_CODES = ['N2S','S2N','E2W','W2E'];
+  const ORIENTATION_LABELS = {
+    N2S: 'מצפון לדרום',
+    S2N: 'מדרום לצפון',
+    E2W: 'ממזרח למערב',
+    W2E: 'ממערב למזרח'
+  };
 
   // אובייקט גלובלי לחשיפה
   const api = {
@@ -17,19 +24,34 @@
         // שליפת כל התיקיות הקיימות בדלי כדי לקבוע מספר קבוצות חדש
         const { data: rootList, error: rootErr } = await window.supabaseClient.storage.from(BUCKET).list('', { limit: 200 });
         if(rootErr){ throw new Error('שגיאה בשליפת תיקיות קיימות: '+rootErr.message); }
-        const existingNums = (rootList||[]).filter(i=> !i.id && /^\d+$/.test(i.name)).map(i=> parseInt(i.name));
-        const maxExisting = existingNums.length? Math.max(...existingNums) : 0;
+        const existingNums = (rootList||[])
+          .filter(i=> !i.id && /^\d+$/.test(i.name))
+          .map(i=> parseInt(i.name, 10));
+        const usedNumbers = new Set(existingNums);
+        const allocatedNumbers = new Set();
 
-        let nextNumber = maxExisting + 1; // מספר התיקייה הבאה האפשרית
+        const pickNextNumber = ()=>{
+          let candidate = 1;
+          while(usedNumbers.has(candidate) || allocatedNumbers.has(candidate)){ candidate++; }
+          allocatedNumbers.add(candidate);
+          return candidate;
+        };
 
         // שליפת רשומות DB כדי להימנע מהעלאה כפולה של מה שכבר הוזן
         const { data: rows, error: rowsErr } = await window.supabaseClient
           .from('orientation_images')
-          .select('storage_path');
+          .select('storage_path,test_number');
         if(rowsErr){ throw new Error('שגיאת DB בשליפה: '+rowsErr.message); }
-        const existingPaths = new Set((rows||[]).map(r=> r.storage_path));
+        const existingPaths = new Set();
+        if(Array.isArray(rows)){
+          for(const r of rows){
+            if(r && r.storage_path){ existingPaths.add(r.storage_path); }
+            if(r && typeof r.test_number==='number' && !Number.isNaN(r.test_number)){ usedNumbers.add(r.test_number); }
+          }
+        }
 
         let uploaded = 0, skipped = 0, createdRows = 0, setsProcessed=0;
+        const newGroupNumbers = [];
 
         for(const set of questionSets){
           // heuristic: אם לקבוצה יש שדות meta שמכילים כבר נתיב storage (נזהה לפי סימן '/' ו-lowercase top) נניח שהיא קיימת
@@ -38,8 +60,8 @@
           // אין תמונות -> דלג
           if(!set.topImage && !(set.viewImages&&set.viewImages.length)){ skipped++; continue; }
 
-          const folderNum = nextNumber; // מקצים מספר חדש לכל קבוצה שלא קיימת
-          nextNumber++;
+          const folderNum = pickNextNumber();
+          let groupHasChanges = false;
 
           // העלאת top
           if(set.topImage && set.topImage.startsWith('data:')){
@@ -57,7 +79,13 @@
                   storage_path: filename,
                   original_name: `${folderNum}-top`
                 });
-                if(insertOk) createdRows++; uploaded++;
+                if(insertOk){
+                  existingPaths.add(filename);
+                  usedNumbers.add(folderNum);
+                  createdRows++;
+                  uploaded++;
+                  groupHasChanges = true;
+                }
               }
             } else skipped++;
           }
@@ -84,15 +112,23 @@
                   storage_path: filename,
                   original_name: `${folderNum}-${code}`
                 });
-                if(insertOk) createdRows++; uploaded++;
+                if(insertOk){
+                  existingPaths.add(filename);
+                  usedNumbers.add(folderNum);
+                  createdRows++;
+                  uploaded++;
+                  groupHasChanges = true;
+                }
               }
             } else skipped++;
           }
+          if(groupHasChanges){ newGroupNumbers.push(folderNum); }
           setsProcessed++;
         }
 
-        api.lastResult = { uploaded, skipped, createdRows, setsProcessed };
-        alert(`✓ סנכרון הסתיים\nהועלו ${uploaded} קבצים\nנוצרו ${createdRows} רשומות DB\nדלגו על ${skipped} (כבר קיימים או לא נתונים)`);
+        api.lastResult = { uploaded, skipped, createdRows, setsProcessed, newGroupNumbers };
+        const groupsMsg = newGroupNumbers.length ? `\nקבוצות חדשות: ${newGroupNumbers.join(', ')}` : '';
+        alert(`✓ סנכרון הסתיים\nהועלו ${uploaded} קבצים\nנוצרו ${createdRows} רשומות DB\nדלגו על ${skipped} (כבר קיימים או לא נתונים)${groupsMsg}`);
         // רענון תצוגת DB בטאב התמצאות אם פתוח
         if(typeof window.loadOrientationDbPreview==='function'){ window.loadOrientationDbPreview(true); }
       } catch(e){
@@ -209,6 +245,48 @@
             if(error){ throw new Error('עדכון רשומה נכשל: '+error.message); }
           }
         }
+
+        if(Array.isArray(updates.removedViews) && updates.removedViews.length){
+          const paths = updates.removedViews.map(v => v && v.storagePath).filter(Boolean);
+          if(paths.length){
+            const { error: removeErr } = await window.supabaseClient.storage.from(BUCKET).remove(paths);
+            if(removeErr && !(removeErr.message && /not\s+found/i.test(removeErr.message))){
+              throw new Error('מחיקת קבצי כיוון נכשלה: '+removeErr.message);
+            }
+          }
+          const ids = updates.removedViews.map(v => v && v.id).filter(Boolean);
+          if(ids.length){
+            const { error: deleteErr } = await window.supabaseClient
+              .from('orientation_images')
+              .delete()
+              .in('id', ids);
+            if(deleteErr){ throw new Error('מחיקת רשומות כיוון נכשלה: '+deleteErr.message); }
+          }
+        }
+
+        if(Array.isArray(updates.addedViews) && updates.addedViews.length){
+          for(const view of updates.addedViews){
+            if(!view || !view.code || !view.newImage || !view.newImage.startsWith('data:')) continue;
+            const code = view.code.toUpperCase();
+            const ext = guessExt(view.newImage) || 'jpeg';
+            const filename = `${testNumber}/${testNumber}-${code}.${ext}`;
+            const uploadOk = await uploadDataUrl(filename, view.newImage);
+            if(!uploadOk){ throw new Error('העלאת כיוון חדש נכשלה: '+code); }
+            const parts = code.split('2');
+            const fromDir = parts[0] || null;
+            const toDir = parts[1] || null;
+            const inserted = await insertRow({
+              test_number: testNumber,
+              view_type: 'orientation',
+              code,
+              from_dir: fromDir,
+              to_dir: toDir,
+              storage_path: filename,
+              original_name: `${testNumber}-${code}`
+            });
+            if(!inserted){ throw new Error('שמירת כיוון חדש נכשלה: '+code); }
+          }
+        }
         
         alert(`✓ קבוצה ${testNumber} עודכנה בהצלחה`);
         if(typeof window.loadOrientationDbPreview==='function'){ 
@@ -298,20 +376,7 @@
   }
 
   // הוספת כפתור מחיקה לכרטיסי ה-DB אחרי טעינה
-  function injectDeleteButtons(){
-    const holder = document.getElementById('orientationDbPreview');
-    if(!holder) return;
-    holder.querySelectorAll('.orient-db-card').forEach(card=>{
-      if(card.querySelector('.orient-del-btn')) return; // כבר קיים
-      const num = card.dataset.testNumber;
-      const btn = document.createElement('button');
-      btn.textContent='מחיקה';
-      btn.className='orient-del-btn';
-      btn.style.cssText='position:absolute;top:8px;right:8px;background:#ef4444;color:#fff;border:none;padding:4px 8px;font-size:0.65rem;border-radius:6px;cursor:pointer;';
-      btn.onclick=()=> api.deleteTestGroup(num);
-      card.appendChild(btn);
-    });
-  }
+  function injectDeleteButtons(){}
 
   // האזנה לרענון התצוגה להזרקת כפתורי מחיקה
   document.addEventListener('click', e=>{
@@ -334,6 +399,9 @@
     
     let newTopImage = null;
     const updatedViews = [];
+    const addedViews = [];
+    const removedViews = [];
+    const existingCodes = new Set((group.viewImages||[]).map(v=> (v.orient||'').toUpperCase()));
     
     box.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid var(--border-color);">
@@ -358,7 +426,7 @@
         
         <!-- תמונות View -->
         <div>
-          <label style="display:block;font-weight:600;margin-bottom:12px;font-size:1rem;color:var(--accent-primary);">🧭 תמונות כיוון (${group.viewImages.length})</label>
+          <label style="display:block;font-weight:600;margin-bottom:12px;font-size:1rem;color:var(--accent-primary);">🧭 תמונות כיוון <span id="orientViewCountLabel">(${group.viewImages.length})</span></label>
           <div id="viewsGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(250px, 1fr));gap:16px;">
             ${group.viewImages.map((v, idx) => `
               <div class="view-card" data-view-idx="${idx}" style="border:2px solid var(--border-color);border-radius:12px;padding:12px;background:var(--bg-secondary);">
@@ -368,8 +436,18 @@
                 </div>
                 <button class="change-view-btn" data-view-idx="${idx}" style="width:100%;padding:8px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.85rem;">📷 החלף</button>
                 <input type="file" class="view-file-input-${idx}" accept="image/*" style="display:none;">
+                <button class="remove-view-btn" data-view-idx="${idx}" style="width:100%;margin-top:8px;padding:8px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;">🗑️ הסר כיוון</button>
               </div>
             `).join('')}
+          </div>
+          <div id="addOrientBlock" style="margin-top:18px;border:2px dashed var(--border-color);border-radius:12px;padding:16px;background:var(--bg-tertiary);">
+            <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+              <span style="font-weight:600;color:var(--text-primary);">➕ הוסף כיוון חדש</span>
+              <select id="orientAddSelect" style="min-width:160px;padding:10px;border-radius:8px;border:2px solid var(--border-color);background:var(--bg-primary);color:var(--text-primary);"></select>
+              <button id="orientAddChooseBtn" style="padding:10px 18px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.85rem;">📁 בחר תמונה</button>
+              <span id="orientAddHint" style="font-size:0.75rem;color:var(--text-secondary);">בחר כיוון ולאחר מכן העלה תמונה.</span>
+            </div>
+            <input type="file" id="orientAddFile" accept="image/*" style="display:none;">
           </div>
         </div>
         
@@ -383,6 +461,132 @@
     
     modal.appendChild(box);
     document.body.appendChild(modal);
+
+    const viewsGrid = box.querySelector('#viewsGrid');
+    const addSelect = box.querySelector('#orientAddSelect');
+    const addFileInput = box.querySelector('#orientAddFile');
+    const addBtn = box.querySelector('#orientAddChooseBtn');
+    const addHint = box.querySelector('#orientAddHint');
+    const viewCountLabel = box.querySelector('#orientViewCountLabel');
+
+    function setAddHint(text, tone='muted'){
+      if(!addHint) return;
+      let color = '#94a3b8';
+      if(tone==='error') color='#ef4444';
+      else if(tone==='success') color='#10b981';
+      else if(tone==='pending') color='#fbbf24';
+      addHint.textContent=text;
+      addHint.style.color=color;
+    }
+
+    function updateViewCount(){
+      if(!viewCountLabel) return;
+      const total = group.viewImages.length - removedViews.length + addedViews.length;
+      viewCountLabel.textContent = `(${Math.max(0,total)})`;
+    }
+
+    function getAvailableCodes(){
+      return ORIENTATION_CODES.filter(code=> !existingCodes.has(code) && !addedViews.some(v=> v.code===code));
+    }
+
+    function refreshAddOptions(){
+      if(!addSelect || !addBtn) return;
+      const options = getAvailableCodes();
+      if(!options.length){
+        addSelect.innerHTML = '<option value="">אין כיוונים זמינים</option>';
+        addSelect.disabled = true;
+        addBtn.disabled = true;
+        setAddHint('כל הכיוונים זמינים כבר בקבוצה זו.', 'muted');
+        return;
+      }
+      const currentValue = addSelect.value;
+      addSelect.innerHTML = ['<option value="">בחר כיוון...</option>'].concat(options.map(code=>`<option value="${code}">${code} — ${ORIENTATION_LABELS[code]||code}</option>`)).join('');
+      if(options.includes(currentValue)){
+        addSelect.value = currentValue;
+      } else {
+        addSelect.value = '';
+      }
+      addSelect.disabled = false;
+      addBtn.disabled = addSelect.value === '';
+      if(addSelect.value===''){
+        setAddHint('בחר כיוון ולאחר מכן העלה תמונה.', 'muted');
+      }
+    }
+
+    function renderAddedViews(){
+      if(!viewsGrid) return;
+      viewsGrid.querySelectorAll('[data-new-view="true"]').forEach(el=> el.remove());
+      addedViews.forEach((view, idx)=>{
+        const card = document.createElement('div');
+        card.dataset.newView = 'true';
+        card.dataset.newIdx = String(idx);
+        card.style.cssText='border:2px solid var(--accent-primary);border-radius:12px;padding:12px;background:var(--bg-secondary);box-shadow:0 0 0 2px rgba(16,185,129,0.4) inset;';
+        card.innerHTML = `
+          <div style="font-weight:700;font-size:0.9rem;margin-bottom:8px;color:var(--accent-primary);text-align:center;">${view.code} · ${ORIENTATION_LABELS[view.code]||view.code}</div>
+          <div style="position:relative;height:140px;border:2px solid var(--accent-primary);border-radius:8px;overflow:hidden;background:#0f172a;margin-bottom:10px;">
+            <img src="${view.newImage}" style="width:100%;height:100%;object-fit:cover;">
+            <div style="position:absolute;top:4px;right:4px;background:rgba(16,185,129,0.9);color:#fff;font-size:0.65rem;padding:3px 6px;border-radius:6px;font-weight:600;">חדש</div>
+          </div>
+          <button class="remove-new-view-btn" data-remove-idx="${idx}" style="width:100%;padding:8px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:0.8rem;">🗑️ הסר כיוון</button>
+        `;
+        viewsGrid.appendChild(card);
+      });
+      viewsGrid.querySelectorAll('.remove-new-view-btn').forEach(btn=>{
+        btn.onclick = ()=>{
+          const removeIdx = parseInt(btn.getAttribute('data-remove-idx'), 10);
+          if(!Number.isNaN(removeIdx)){
+            addedViews.splice(removeIdx,1);
+            renderAddedViews();
+            refreshAddOptions();
+            setAddHint('כיוון הוסר. ניתן לבחור כיוון אחר.', 'muted');
+          }
+        };
+      });
+      updateViewCount();
+    }
+
+    if(addSelect && addBtn){
+      refreshAddOptions();
+      addSelect.onchange = ()=>{
+        addBtn.disabled = addSelect.value === '';
+        if(addSelect.value){
+          setAddHint(`בחר תמונה לכיוון ${addSelect.value}.`, 'muted');
+        }
+      };
+      addBtn.onclick = ()=>{
+        if(addBtn.disabled) return;
+        addFileInput && addFileInput.click();
+      };
+    }
+
+    if(addFileInput){
+      addFileInput.onchange = e=>{
+        const file = e.target.files && e.target.files[0];
+        if(!file){ return; }
+        const code = addSelect ? addSelect.value : '';
+        if(!code){
+          setAddHint('יש לבחור כיוון לפני העלאת תמונה.', 'error');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = ev=>{
+          const dataUrl = ev.target && ev.target.result;
+          if(!dataUrl || typeof dataUrl !== 'string'){
+            setAddHint('שגיאה בקריאת הקובץ.', 'error');
+            return;
+          }
+          addedViews.push({ code, newImage: dataUrl });
+          renderAddedViews();
+          refreshAddOptions();
+          setAddHint(`כיוון ${code} הוכן. שמור את השינויים להשלמה.`, 'success');
+        };
+        reader.onerror = ()=> setAddHint('שגיאה בקריאת הקובץ.', 'error');
+        reader.readAsDataURL(file);
+        e.target.value='';
+      };
+    }
+
+    renderAddedViews();
     
     // Event handlers
     const closeModal = () => modal.remove();
@@ -414,10 +618,12 @@
     }
     
     // החלפת תמונות view
-    document.querySelectorAll('.change-view-btn').forEach(btn => {
+    box.querySelectorAll('.change-view-btn').forEach(btn => {
+      if(!btn.dataset.originalLabel){ btn.dataset.originalLabel = btn.textContent || '📷 החלף'; }
       btn.onclick = () => {
         const idx = parseInt(btn.dataset.viewIdx);
-        const input = document.querySelector(`.view-file-input-${idx}`);
+        const input = box.querySelector(`.view-file-input-${idx}`);
+        if(!input) return;
         input.click();
         
         input.onchange = (e) => {
@@ -443,7 +649,8 @@
             }
             
             // עדכון תצוגה
-            const preview = document.querySelector(`.view-preview-${idx}`);
+            const preview = box.querySelector(`.view-preview-${idx}`);
+            if(!preview) return;
             preview.innerHTML = `
               <img src="${newImage}" style="width:100%;height:100%;object-fit:cover;">
               <div style="position:absolute;top:4px;right:4px;background:rgba(16,185,129,0.9);color:#fff;font-size:0.65rem;padding:3px 6px;border-radius:4px;font-weight:600;">חדש ✓</div>
@@ -453,17 +660,98 @@
         };
       };
     });
+
+    box.querySelectorAll('.remove-view-btn').forEach(btn => {
+      btn.onclick = () => {
+        const idx = parseInt(btn.dataset.viewIdx, 10);
+        if(Number.isNaN(idx)) return;
+        const view = group.viewImages[idx];
+        if(!view) return;
+        const card = btn.closest('.view-card');
+        const code = (view.orient || '').toUpperCase();
+        if(!card) return;
+        const removalIdx = removedViews.findIndex(v => v.id === view.id);
+        if(removalIdx === -1){
+          removedViews.push({ id: view.id, storagePath: view.storagePath });
+          existingCodes.delete(code);
+          const changeBtn = card.querySelector('.change-view-btn');
+          if(changeBtn){
+            changeBtn.disabled = true;
+            changeBtn.style.opacity = '0.55';
+            changeBtn.textContent = 'יימחק בשמירה';
+          }
+          card.dataset.removed = 'true';
+          card.style.opacity = '0.4';
+          card.style.filter = 'grayscale(80%)';
+          card.style.position = 'relative';
+          let badge = card.querySelector('.orient-remove-badge');
+          if(!badge){
+            badge = document.createElement('div');
+            badge.className = 'orient-remove-badge';
+            badge.style.cssText = 'position:absolute;top:8px;left:8px;background:rgba(239,68,68,0.95);color:#fff;font-size:0.7rem;padding:4px 8px;border-radius:6px;font-weight:700;box-shadow:0 4px 12px rgba(239,68,68,0.3);';
+            card.appendChild(badge);
+          }
+          badge.textContent = 'יימחק בשמירה';
+          badge.style.display = 'block';
+          const pendingIdx = updatedViews.findIndex(v => v.id === view.id);
+          if(pendingIdx >= 0){
+            card.__pendingUpdate = updatedViews.splice(pendingIdx, 1)[0];
+          }
+          btn.textContent = '↩️ בטל מחיקה';
+          btn.style.background = '#475569';
+          btn.dataset.state = 'removed';
+          setAddHint('כיוון יסומן למחיקה. ניתן להוסיף או לבחור כיוון חדש.', 'pending');
+        } else {
+          removedViews.splice(removalIdx,1);
+          existingCodes.add(code);
+          const changeBtn = card.querySelector('.change-view-btn');
+          if(changeBtn){
+            changeBtn.disabled = false;
+            changeBtn.style.opacity = '';
+            changeBtn.textContent = changeBtn.dataset.originalLabel || '📷 החלף';
+          }
+          card.dataset.removed = 'false';
+          card.style.opacity = '';
+          card.style.filter = '';
+          const badge = card.querySelector('.orient-remove-badge');
+          if(badge){ badge.style.display = 'none'; }
+          if(card.__pendingUpdate){
+            updatedViews.push(card.__pendingUpdate);
+            delete card.__pendingUpdate;
+          }
+          btn.textContent = '🗑️ הסר כיוון';
+          btn.style.background = '#ef4444';
+          btn.dataset.state = 'active';
+          setAddHint('כיוון שוחזר. אפשר להמשיך לערוך או למחוק מחדש.', 'muted');
+        }
+        refreshAddOptions();
+        updateViewCount();
+        const remaining = group.viewImages.length - removedViews.length + addedViews.length;
+        if(remaining <= 0){
+          setAddHint('קבוצה חייבת לכלול לפחות כיוון אחד. הוסף כיוון חדש לפני שמירה.', 'error');
+        }
+      };
+    });
     
     // שמירת שינויים
     document.getElementById('saveOrientEditBtn').onclick = async () => {
-      if(!newTopImage && !updatedViews.length){
+      const saveBtn = document.getElementById('saveOrientEditBtn');
+      if(!newTopImage && !updatedViews.length && !addedViews.length && !removedViews.length){
         alert('לא בוצעו שינויים');
         return;
       }
       
       const updates = {
-        updatedViews
+        updatedViews,
+        addedViews,
+        removedViews
       };
+
+      const resultingViews = group.viewImages.length - removedViews.length + addedViews.length;
+      if(resultingViews <= 0){
+        alert('קבוצה חייבת לכלול לפחות כיוון אחד. הוסף כיוון חדש או בטל מחיקה לפני שמירה.');
+        return;
+      }
       
       if(newTopImage){
         updates.newTopImage = newTopImage;
@@ -472,7 +760,6 @@
       }
       
       try {
-        const saveBtn = document.getElementById('saveOrientEditBtn');
         saveBtn.disabled = true;
         saveBtn.textContent = '⏳ שומר...';
         
@@ -480,9 +767,10 @@
         closeModal();
       } catch(e){
         alert('❌ שגיאה בשמירה: ' + e.message);
-        const saveBtn = document.getElementById('saveOrientEditBtn');
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 שמור שינויים';
+        if(saveBtn){
+          saveBtn.disabled = false;
+          saveBtn.textContent = '💾 שמור שינויים';
+        }
       }
     };
     
