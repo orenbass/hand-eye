@@ -34,16 +34,9 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   let globalRefreshing = false;
   let practiceIndex = -1;
   let practiceModalEl = null;
+  let prePracticeShown = false;
 
-  function enforcePracticeParts(list){
-    if(!Array.isArray(list)) return [];
-    return list.map((part, idx)=>{
-      if(!part) return part;
-      part.isPractice = idx === 0;
-      part.partType = part.isPractice? 'practice':'exam';
-      return part;
-    });
-  }
+  // Removed enforcePracticeParts function as it is handled by flightexam-sync.js
 
   function isPracticePart(index){
     return !!(partsRef && partsRef[index] && partsRef[index].isPractice);
@@ -59,39 +52,82 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     overlay.id = 'flightexam-practice-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
     overlay.innerHTML = `
-      <div style="max-width:480px;width:100%;background:#ffffff;color:#0f172a;border-radius:18px;padding:28px;box-shadow:0 30px 60px rgba(15,23,42,0.45);text-align:center;">
-        <div style="font-size:2.5rem;margin-bottom:12px">✈️</div>
-        <h2 style="margin:0 0 10px;font-size:1.45rem">התרגול הסתיים</h2>
-        <p style="margin:0 0 18px;font-size:1rem;color:#475569;line-height:1.6">
-          ברגע שתמשיך, <strong>המבחן האמיתי יתחיל מיד בשלב ההסתכלות על המסלול</strong>. הייה מוכן לכך שהמסלול יוצג מיידית.
-        </p>
-        <button type="button" data-action="confirm" class="btn" style="padding:12px 18px;border:none;border-radius:12px;background:#0ea5e9;color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:220px;">הבנתי – להתחיל את המבחן</button>
+      <div class="flightexam-modal-content" style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
+        <!-- Content injected dynamically -->
       </div>`;
     document.body.appendChild(overlay);
     practiceModalEl = overlay;
     return overlay;
   }
 
+  function showPrePracticeModal(onStart){
+    const modal = ensurePracticeModal();
+    const contentBox = modal.querySelector('.flightexam-modal-content');
+    
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+        </p>
+        <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    const startBtn = contentBox.querySelector('[data-action="start-practice"]');
+    if (startBtn) {
+      startBtn.onclick = () => {
+        modal.style.display = 'none';
+        if (typeof onStart === 'function') onStart();
+      };
+    }
+  }
+
   function showPracticeTransitionPrompt(onContinue){
     const modal = ensurePracticeModal();
-    const confirmBtn = modal.querySelector('[data-action="confirm"]');
-    const cancelBtn = modal.querySelector('[data-action="cancel"]');
+    const contentBox = modal.querySelector('.flightexam-modal-content');
+    
+    contentBox.innerHTML = `
+        <div style="font-size:2.5rem;margin-bottom:12px">✈️</div>
+        <h2 style="margin:0 0 10px;font-size:1.45rem">התרגול הסתיים</h2>
+        <p style="margin:0 0 18px;font-size:1rem;color:#475569;line-height:1.6">
+          ברגע שתמשיך, <strong>המבחן האמיתי יתחיל מיד בשלב ההסתכלות על המסלול</strong>. הייה מוכן לכך שהמסלול יוצג מיידית.
+        </p>
+        <button type="button" data-action="confirm" class="btn" style="padding:12px 18px;border:none;border-radius:12px;background:#0ea5e9;color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:220px;">הבנתי – להתחיל את המבחן</button>
+    `;
+
     modal.style.display = 'flex';
-    let handled = false;
-    const cleanup = ()=>{
-      modal.style.display = 'none';
-      confirmBtn.onclick = null;
-      handled = true;
-    };
-    confirmBtn.onclick = ()=>{
-      if(handled) return;
-      cleanup();
-      if(typeof onContinue === 'function') onContinue();
-    };
-    if(cancelBtn){
-      cancelBtn.onclick = ()=>{
-        if(handled) return;
-        cleanup();
+    
+    const confirmBtn = contentBox.querySelector('[data-action="confirm"]');
+    if(confirmBtn){
+      confirmBtn.onclick = ()=>{
+        const countdownSec = cfg && typeof cfg.examCountdownSec === 'number' ? cfg.examCountdownSec : 5;
+        
+        if (countdownSec > 0) {
+            // Countdown State inside modal
+            let remaining = countdownSec;
+            contentBox.innerHTML = `
+                <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="fe-modal-countdown">${remaining}</div>
+                <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                <p style="color:#64748b;margin:0">נא להתכונן</p>
+            `;
+            
+            const timer = setInterval(() => {
+                remaining--;
+                const el = document.getElementById('fe-modal-countdown');
+                if(el) el.textContent = remaining;
+                
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    modal.style.display = 'none';
+                    if (typeof onContinue === 'function') onContinue();
+                }
+            }, 1000);
+        } else {
+            modal.style.display = 'none';
+            if (typeof onContinue === 'function') onContinue();
+        }
       };
     }
   }
@@ -119,8 +155,8 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     if(window.practiceBanner){
       if(practiceActive){
         window.practiceBanner.show({
-          label: 'מצב תרגול',
-          description: 'החלק הנוכחי אינו נספר לציון'
+        label: 'מצב תרגול',
+        description: 'התוצאות אינן נשמרות',
         });
       } else {
         window.practiceBanner.hide();
@@ -427,6 +463,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     console.log('[flightexam] start invoked');
     adjustLayout();
     if(active) return;
+    prePracticeShown = false; // Reset for new session
     if(window.enterFullscreenMode) window.enterFullscreenMode();
     
     cfg = getFlightExamConfig();
@@ -464,17 +501,36 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       }
       
       partsRef = window.getFlightExamParts? (window.getFlightExamParts()||[]):[];
-      partsRef = enforcePracticeParts(partsRef.slice());
-      practiceIndex = partsRef.length? 0 : -1;
+      
+      // Sort and limit practice parts based on configuration
+      const practiceParts = partsRef.filter(p => p.isPractice);
+      const examParts = partsRef.filter(p => !p.isPractice);
+      // Default to 1 if not specified, but allow 0 if explicitly set to 0 (though unlikely for practice)
+      const maxPractice = (cfg && typeof cfg.practiceRuns === 'number') ? cfg.practiceRuns : 1;
+      const finalPracticeParts = practiceParts.slice(0, maxPractice);
+      
+      // Limit exam parts
+      const maxExam = (cfg && typeof cfg.examRuns === 'number') ? cfg.examRuns : 1;
+      const finalExamParts = examParts.slice(0, maxExam);
+
+      // Reassemble: Selected Practice Parts -> Exam Parts
+      partsRef = [...finalPracticeParts, ...finalExamParts];
+
+      practiceIndex = partsRef.findIndex(p => p.isPractice);
       currentPart = 0;
       updatePracticeUiState();
 
-      console.log('[flightexam] parts count=', partsRef.length, 'practiceIndex=', practiceIndex);
+      console.log('[flightexam] parts count=', partsRef.length, 'practiceIndex=', practiceIndex, 'maxPractice=', maxPractice);
       if(!partsRef.length){ 
         throw new Error('לא נמצאו חלקי מבחן טיסה. ודא שהתמונות הועלו לשרת.');
       }
       if(practiceIndex !== -1 && !hasNonPracticeParts(partsRef)){
         throw new Error('נדרש לפחות חלק מבחן אמיתי אחד בנוסף לחלק התרגול בבסיס הנתונים.');
+      }
+
+      if(practiceIndex !== -1 && !prePracticeShown){
+        prePracticeShown = true;
+        await new Promise(resolve => showPrePracticeModal(resolve));
       }
 
       await preloadPart(partsRef, 0);
@@ -551,6 +607,12 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       console.warn('[flightexam] missing part', index); 
       finalizeReview(true); 
       return; 
+    }
+
+    if(practicePart && cfg && cfg.practiceDurationSec){
+      durationFlightSec = cfg.practiceDurationSec;
+    } else {
+      durationFlightSec = cfg.flightDurationSec;
     }
     
     console.log('[flightexam] Part loaded:', {
@@ -906,10 +968,53 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       ctx.fillText('חץ שמאל/ימין = סיבוב | רווח = תנועה קדימה', canvas.width/2, canvas.height/2 + 100);
       
       if(remaining <= 0){
-        console.log('[flightexam] PREFLIGHT time expired, starting flight');
+        console.log('[flightexam] PREFLIGHT time expired, waiting for start');
+        stage = 'waiting_for_start';
+        initPlaneFromPath();
+      }
+    } else if(stage==='waiting_for_start'){
+      // Draw test image (flight view)
+      if(testImgReady){
+        const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height;
+        const sr=sw/sh, dr=dw/dh; 
+        let w,h; 
+        if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
+        const ox=(dw-w)/2, oy=(dh-h)/2; 
+        ctx.drawImage(testImg,ox,oy,w,h);
+        
+        // Draw start/end markers
+        if(pathPoints && pathPoints.length){
+          const startP=pathPoints[0]; 
+          const endP=pathPoints[pathPoints.length-1];
+          if(startP){ 
+            const sx=ox+startP.x*w, sy=oy+startP.y*h; 
+            ctx.beginPath(); ctx.arc(sx,sy,10,0,Math.PI*2); ctx.fillStyle='#10b981'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke(); 
+          }
+          if(endP && endP!==startP){ 
+            const ex=ox+endP.x*w, ey=oy+endP.y*h; 
+            ctx.beginPath(); ctx.arc(ex,ey,10,0,Math.PI*2); ctx.fillStyle='#ef4444'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke(); 
+          }
+        }
+
+        // Draw plane at start
+        const planeSize = computePlaneSize(canvas.width, canvas.height);
+        drawPlane(ctx, ox + planeNX * w, oy + planeNY * h, planeSize, planeHeading);
+      }
+
+      // Overlay
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.6)';
+      ctx.fillRect(0, canvas.height/2 - 60, canvas.width, 120);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 32px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('לחץ על רווח כדי להתחיל', canvas.width/2, canvas.height/2 + 10);
+
+      setStageMessage('המבחן מוכן - לחץ על רווח כדי להמריא.');
+
+      if(slowActive){ // Space pressed
+        console.log('[flightexam] Space pressed, starting flight');
         stage = 'flight';
         flightStartTime = Date.now();
-        initPlaneFromPath();
       }
     } else if(stage==='flight'){
       const now=performance.now();
@@ -945,7 +1050,9 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         const endP = pathPoints[pathPoints.length-1];
         const dx = planeNX - endP.x; 
         const dy = planeNY - endP.y;
-        if(dx*dx + dy*dy <= END_REACH_RADIUS*END_REACH_RADIUS){
+        // Increased hit area for end point (3x radius)
+        const hitRadius = END_REACH_RADIUS * 3;
+        if(dx*dx + dy*dy <= hitRadius*hitRadius){
           finish();
         }
       }
@@ -1208,9 +1315,24 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function finalizeReview(forceEnd){
     if(!reviewActive && !forceEnd) return;
     reviewActive=false;
-    const currentIsPractice = practiceIndex !== -1 && currentPart === practiceIndex;
+    const currentIsPractice = isPracticePart(currentPart);
+    const nextPartIndex = currentPart + 1;
+    const nextPart = partsRef[nextPartIndex];
+    const nextIsPractice = nextPart && nextPart.isPractice;
     
-    if(currentIsPractice && currentPart < partsRef.length - 1){
+    if(currentIsPractice && nextIsPractice){
+      // Practice -> Practice: Continue automatically with short delay
+      setStageMessage('חלק תרגול הושלם. עובר לחלק הבא...');
+      setTimeout(()=>{
+        currentPart++;
+        updatePracticeUiState();
+        loadPart(currentPart);
+      }, 1500);
+      return;
+    }
+
+    if(currentIsPractice && !nextIsPractice && nextPart){
+      // Practice -> Exam: Show transition prompt
       showPracticeTransitionPrompt(()=>{
         currentPart++;
         updatePracticeUiState();
@@ -1259,13 +1381,13 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   startBtn.addEventListener('click', start);
 
   document.addEventListener('keydown', e=>{
-    if(stage!=='flight' && stage!=='review') return;
+    if(stage!=='flight' && stage!=='review' && stage!=='waiting_for_start') return;
     if(stage==='review' && e.code==='Enter'){ 
       e.preventDefault(); 
       finalizeReview(); 
       return; 
     }
-    if(stage==='flight'){
+    if(stage==='flight' || stage==='waiting_for_start'){
       if(e.code==='ArrowLeft'){ 
         keyState.ArrowLeft=true; 
         e.preventDefault(); 

@@ -5,7 +5,6 @@ export function getOrientationConfig(){
   return {
     displayTimeSec: (orientCfg.displayTimeSec) || (cfg && cfg.displayTimeSec) || 10,
     maxQuestions: (orientCfg.maxQuestions) || (cfg && cfg.maxQuestions) || 10,
-    timeLimitMin: (orientCfg.timeLimitMin) || (cfg && cfg.timeLimitMin) || 6,
     showCompass: orientCfg.showCompass !== false
   };
 }

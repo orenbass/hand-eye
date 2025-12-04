@@ -66,6 +66,7 @@ class EyeHandTest {
     this.canvasResizeHandler = null;
     this.timerRunning = false;
     this.canvasSized = false;
+    this.prePracticeShown = false;
   }
 
   init() {
@@ -77,7 +78,17 @@ class EyeHandTest {
     const startButton = document.getElementById('start-button');
     const retryButton = document.getElementById('retry-button');
     const newPathButton = document.getElementById('new-path-button');
-    if (startButton) startButton.addEventListener('click', () => this.showTestScreen());
+    if (startButton) {
+      startButton.addEventListener('click', () => {
+        this.reloadConfig();
+        if (this.practiceEnabled && !this.prePracticeShown) {
+          this.prePracticeShown = true;
+          this.showPrePracticeModal(() => this.showTestScreen());
+        } else {
+          this.showTestScreen();
+        }
+      });
+    }
     if (retryButton) retryButton.addEventListener('click', () => this.retryTest());
     if (newPathButton) newPathButton.addEventListener('click', () => this.newPathTest());
     if (this.instructionsToggle) this.instructionsToggle.addEventListener('click', () => this.toggleInstructionsOverlay());
@@ -323,11 +334,22 @@ class EyeHandTest {
     if (!window.practiceBanner) return;
     if (this.mode === 'practice' && this.practiceEnabled) {
       window.practiceBanner.show({
-        label: 'מצב תרגול',
-        description: 'השלב הנוכחי אינו נרשם לציון'
+       label: 'מצב תרגול',
+       description: 'התוצאות אינן נשמרות'
       });
     } else {
       window.practiceBanner.hide();
+    }
+  }
+
+  clearCountdown() {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
+    if (this.countdownEl) {
+      this.countdownEl.style.display = 'none';
+      this.countdownEl.textContent = '';
     }
   }
 
@@ -362,37 +384,7 @@ class EyeHandTest {
     }
     this.mode = 'exam';
     this.updateStageUi('התרגול הסתיים - המבחן האמיתי יתחיל לאחר האישור שלך.');
-    this.showPracticeModal(() => this.beginExamCountdown());
-  }
-
-  beginExamCountdown(){
-    this.mode = 'exam';
-    this.updateStageUi('ספירה לאחור למבחן האמיתי');
-    if (!this.countdownEl || this.examCountdownSec <= 0) {
-      this.startRun('exam');
-      return;
-    }
-    this.clearCountdown();
-    this.countdownRemaining = this.examCountdownSec;
-    this.countdownEl.style.display = 'block';
-    this.countdownEl.textContent = this.countdownRemaining;
-    this.countdownInterval = setInterval(() => {
-      this.countdownRemaining -= 1;
-      if (this.countdownRemaining <= 0) {
-        this.clearCountdown();
-        this.startRun('exam');
-      } else if (this.countdownEl) {
-        this.countdownEl.textContent = this.countdownRemaining;
-      }
-    }, 1000);
-  }
-
-  clearCountdown(){
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-      this.countdownInterval = null;
-    }
-    if (this.countdownEl) this.countdownEl.style.display = 'none';
+    this.showPracticeModal(() => this.startRun('exam'));
   }
 
   ensurePracticeModal(){
@@ -401,13 +393,8 @@ class EyeHandTest {
     overlay.id = 'eyehand-practice-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
     overlay.innerHTML = `
-      <div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
-        <div style="font-size:2.6rem;margin-bottom:12px">🎯</div>
-        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
-        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
-        </p>
-        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+      <div class="eyehand-modal-content" style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
+        <!-- Content injected dynamically -->
       </div>`;
     document.body.appendChild(overlay);
     this.practiceModalEl = overlay;
@@ -416,12 +403,71 @@ class EyeHandTest {
 
   showPracticeModal(onContinue){
     const modal = this.ensurePracticeModal();
+    const contentBox = modal.querySelector('.eyehand-modal-content');
+    
+    // Initial State
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">🎯</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
+        </p>
+        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+    `;
+    
     modal.style.display = 'flex';
-    const confirmBtn = modal.querySelector('[data-action="confirm"]');
+    
+    const confirmBtn = contentBox.querySelector('[data-action="confirm"]');
     if (confirmBtn) {
       confirmBtn.onclick = () => {
+        if (this.examCountdownSec > 0) {
+            // Countdown State inside modal
+            let remaining = this.examCountdownSec;
+            contentBox.innerHTML = `
+                <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="eh-modal-countdown">${remaining}</div>
+                <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                <p style="color:#64748b;margin:0">נא להתכונן</p>
+            `;
+            
+            const timer = setInterval(() => {
+                remaining--;
+                const el = document.getElementById('eh-modal-countdown');
+                if(el) el.textContent = remaining;
+                
+                if (remaining <= 0) {
+                    clearInterval(timer);
+                    modal.style.display = 'none';
+                    if (typeof onContinue === 'function') onContinue();
+                }
+            }, 1000);
+        } else {
+            modal.style.display = 'none';
+            if (typeof onContinue === 'function') onContinue();
+        }
+      };
+    }
+  }
+
+  showPrePracticeModal(onStart){
+    const modal = this.ensurePracticeModal();
+    const contentBox = modal.querySelector('.eyehand-modal-content');
+    
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו במשך זמן קצר.
+        </p>
+        <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    const startBtn = contentBox.querySelector('[data-action="start-practice"]');
+    if (startBtn) {
+      startBtn.onclick = () => {
         modal.style.display = 'none';
-        if (typeof onContinue === 'function') onContinue();
+        if (typeof onStart === 'function') onStart();
       };
     }
   }

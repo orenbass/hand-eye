@@ -12,9 +12,6 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.outsEl=document.getElementById('tracking-outs');
             this.scoreEl=document.getElementById('tracking-score');
             this.statsBox=document.getElementById('tracking-stats');
-            this.phaseBanner=document.getElementById('tracking-phase-banner');
-            this.realStartBtn=document.getElementById('tracking-real-start-button');
-            this.countdownEl=document.getElementById('tracking-countdown');
             this.statusEl=document.getElementById('tracking-status');
             this.numberBoxEl=null;
             // dynamic config
@@ -26,13 +23,109 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.currentNumber=1; this.previousNumber=0; this.numberStartTime=0; this.totalNumbers=0; this.correctClicks=0; this.wrongClicks=0; this.missedNumbers=0; this.numberHistory=[]; this.lastKeyFeedback=null;
             this.stage='idle'; this.practiceDone=false; this.countdownTimer=null; this.countdownRemaining=0; this.mode=null;
             this.lockToken=null;
+            this.practiceModalEl=null;
+            this.prePracticeShown=false;
+            this.practiceRunsComplete=0;
+            
+            // Attach HUDs
+            if(window.timerHUD && window.timerHUD.attach) {
+                window.timerHUD.attach(document.getElementById('tracking-timer-slot'));
+            }
+            if(window.practiceBanner && window.practiceBanner.attach) {
+                window.practiceBanner.attach(document.getElementById('tracking-practice-slot'));
+            }
+
+            this.updateLayoutState();
             this.resize();
             this.bind();
         }
-        reloadConfig(){
+        updateLayoutState() {
+            const layout = document.getElementById('tracking-layout');
+            if (layout) {
+                // Map internal stage/mode to CSS data-stage
+                // stage can be 'idle', 'practice', 'real', 'done'
+                let cssStage = this.stage;
+                if (this.mode === 'practice') cssStage = 'practice';
+                if (this.mode === 'real') cssStage = 'real';
+                if (this.stage === 'done') cssStage = 'done';
+                
+                layout.setAttribute('data-stage', cssStage);
+            }
+        }
+        ensurePracticeModal(){
+            if(this.practiceModalEl) return this.practiceModalEl;
+            const overlay=document.createElement('div');
+            overlay.id='tracking-practice-modal';
+            overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML=`<div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;"></div>`;
+            document.body.appendChild(overlay);
+            this.practiceModalEl=overlay;
+            return overlay;
+        }
+        showPrePracticeModal(onStart){
+            const modal=this.ensurePracticeModal();
+            const contentBox = modal.querySelector('div');
+            contentBox.innerHTML = `
+                <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+                </p>
+                <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+            `;
+            modal.style.display='flex';
+            const startBtn=contentBox.querySelector('[data-action="start-practice"]');
+            if(startBtn){
+                startBtn.onclick=()=>{
+                    modal.style.display='none';
+                    if(typeof onStart==='function') onStart();
+                };
+            }
+        }
+        showEndPracticeModal(onRealStart){
+            const modal = this.ensurePracticeModal();
+            const contentBox = modal.querySelector('div');
+            contentBox.innerHTML = `
+                <div style="font-size:2.6rem;margin-bottom:12px">✓</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  כעת נעבור למבחן האמיתי. התוצאות יישמרו.
+                </p>
+                <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">סיימתי תרגול – להתחיל מבחן אמיתי</button>
+            `;
+            modal.style.display = 'flex';
+            
+            const btn = contentBox.querySelector('[data-action="start-real"]');
+            btn.onclick = () => {
+                const countdownSec = this.config && this.config.examCountdownSec ? this.config.examCountdownSec : 0;
+                if(countdownSec > 0){
+                    let remaining = countdownSec;
+                    contentBox.innerHTML = `
+                        <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="trk-modal-countdown">${remaining}</div>
+                        <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                        <p style="color:#64748b;margin:0">נא להתכונן</p>
+                    `;
+                    const timer = setInterval(()=>{
+                        remaining--;
+                        const el = document.getElementById('trk-modal-countdown');
+                        if(el) el.textContent = remaining;
+                        if(remaining <= 0){
+                            clearInterval(timer);
+                            modal.style.display = 'none';
+                            if(onRealStart) onRealStart();
+                        }
+                    }, 1000);
+                } else {
+                    modal.style.display = 'none';
+                    if(onRealStart) onRealStart();
+                }
+            };
+        }
+        reloadConfig(modeOverride){
             const cfg=getTrackingConfig();
             this.config=cfg;
-            this.duration = cfg.seconds * 1000;
+            const currentMode = modeOverride || this.mode || 'real';
+            this.duration = (currentMode === 'practice' ? cfg.practiceSeconds : cfg.seconds) * 1000;
             this.speed = cfg.speed;
             this.radiusFactor = cfg.radiusFactor;
             this.numberTimeout = cfg.numberTimeoutSec * 1000;
@@ -56,11 +149,37 @@ import { computeTrackingScores } from './tracking.scoring.js';
         nextNumber(){ let next; do{ next=Math.floor(Math.random()*4)+1; }while(next===this.previousNumber); this.previousNumber=this.currentNumber; this.currentNumber=next; this.numberStartTime=performance.now(); this.updateNumberDisplay(); }
         checkNumberTimeout(){ if(!this.running) return; const elapsed=performance.now()-this.numberStartTime; if(elapsed>=this.numberTimeout){ this.missedNumbers++; this.numberHistory.push({number:this.currentNumber,correct:false,time:this.numberTimeout,missed:true}); this.nextNumber(); } }
         initTargetVelocity(){ const v=randomAngleVelocity(this.speed); this.target.vx=v.vx; this.target.vy=v.vy; }
-        resize(){ if(!this.canvas) return; const size=Math.floor(window.innerHeight*0.8); this.canvas.width=size; this.canvas.height=size; this.canvas.style.width=size+'px'; this.canvas.style.height=size+'px'; const minDim=size; this.target.r=Math.max(30, Math.min(60, Math.round(minDim * this.radiusFactor))); if(!this.running){ this.target.x=this.canvas.width/2; this.target.y=this.canvas.height/2; } }
+        resize(){ 
+            if(!this.canvas) return; 
+            
+            // Calculate available space based on the main panel to avoid overlapping header/footer
+            const mainPanel = document.querySelector('.tracking-main-panel');
+            let availableHeight = window.innerHeight * 0.75;
+            let availableWidth = window.innerWidth * 0.9;
+
+            if (mainPanel) {
+                const rect = mainPanel.getBoundingClientRect();
+                if (rect.height > 100) {
+                    availableHeight = rect.height - 40; // padding
+                    availableWidth = rect.width - 40;
+                }
+            }
+
+            const size=Math.floor(Math.min(availableWidth, availableHeight)); 
+            this.canvas.width=size; this.canvas.height=size; this.canvas.style.width=size+'px'; this.canvas.style.height=size+'px'; 
+            const minDim=size; this.target.r=Math.max(30, Math.min(60, Math.round(minDim * this.radiusFactor))); 
+            if(!this.running){ this.target.x=this.canvas.width/2; this.target.y=this.canvas.height/2; } 
+        }
         bind(){
             const btn=document.getElementById('start-tracking-button');
-            if(btn) btn.addEventListener('click',()=>this.startPractice());
-            if(this.realStartBtn) this.realStartBtn.addEventListener('click',()=>this.startRealCountdown());
+            if(btn) btn.addEventListener('click',()=> {
+                if(!this.prePracticeShown){
+                    this.prePracticeShown=true;
+                    this.showPrePracticeModal(()=>this.startPractice());
+                } else {
+                    this.startPractice();
+                }
+            });
             if(this.canvas) this.canvas.addEventListener('mousemove',e=>this.handleMove(e));
             window.addEventListener('resize',()=>{ if(!this.running) this.resize(); });
             document.addEventListener('keydown',e=>{ if(!this.running) return; if(['1','2','3','4'].includes(e.key)){ e.preventDefault(); this.handleNumberKey(e.key); } });
@@ -91,37 +210,6 @@ import { computeTrackingScores } from './tracking.scoring.js';
                 this.lockToken=null;
             }
         }
-        setBanner(text,mode){
-            if(!this.phaseBanner) return;
-            if(!text){
-                this.phaseBanner.style.display='none';
-                this.phaseBanner.textContent='';
-                this.phaseBanner.removeAttribute('data-mode');
-                return;
-            }
-            this.phaseBanner.style.display='block';
-            this.phaseBanner.textContent=text;
-            if(mode){ this.phaseBanner.setAttribute('data-mode',mode); }
-            else { this.phaseBanner.removeAttribute('data-mode'); }
-        }
-        toggleRealStartButton(show, disabled=false){
-            if(!this.realStartBtn) return;
-            this.realStartBtn.style.display=show?'inline-flex':'none';
-            this.realStartBtn.disabled=!!disabled;
-        }
-        setCountdown(text){
-            if(!this.countdownEl) return;
-            if(text){
-                this.countdownEl.style.display='block';
-                this.countdownEl.textContent=text;
-            } else {
-                this.countdownEl.style.display='none';
-                this.countdownEl.textContent='';
-            }
-        }
-        clearCountdown(){
-            if(this.countdownTimer){ clearInterval(this.countdownTimer); this.countdownTimer=null; }
-        }
         setStatus(text, tone='info'){
             if(!this.statusEl) return;
             this.statusEl.textContent=text||'';
@@ -147,14 +235,35 @@ import { computeTrackingScores } from './tracking.scoring.js';
         }
         startPractice(){
             if(this.stage==='real' || this.stage==='countdown' || this.stage==='done') return;
-            if(this.stage==='practice' && !this.practiceDone) return;
+            // if(this.stage==='practice' && !this.practiceDone) return;
             if(window.enterFullscreenMode) window.enterFullscreenMode();
+
+            // Re-attach HUDs
+            if(window.timerHUD && window.timerHUD.attach) {
+                window.timerHUD.attach(document.getElementById('tracking-timer-slot'));
+            }
+            if(window.practiceBanner && window.practiceBanner.attach) {
+                window.practiceBanner.attach(document.getElementById('tracking-practice-slot'));
+            }
+
             this.stage='practice';
             this.practiceDone=false;
             this.mode='practice';
-            this.setBanner('תרגול - התוצאות אינן נשמרות', 'practice');
-            this.toggleRealStartButton(true,false);
-            this.setCountdown(null);
+            this.updateLayoutState();
+            
+            const totalRuns = this.config && this.config.practiceRuns ? this.config.practiceRuns : 1;
+            const currentRun = this.practiceRunsComplete + 1;
+
+            if(window.practiceBanner) {
+                window.practiceBanner.show({
+                    label: 'מצב תרגול',
+                    description: 'התוצאות אינן נשמרות'
+                });
+            }
+            if(window.timerHUD) {
+                window.timerHUD.show('זמן תרגול', '00:00', 'practice');
+            }
+
             this.setStatus('תרגול: שמור את הסמן בתוך העיגול והקלד את המספרים', 'info');
             this.updateStatsVisibility();
             this.startRun('practice');
@@ -164,59 +273,56 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.stage='practice';
             this.practiceDone=true;
             this.mode=null;
-            if(!skipMessage){
-                this.setStatus('התרגול הסתיים. לחצו על "סיימתי תרגול – להתחיל מבחן אמיתי" כדי להמשיך.', 'info');
-                this.setBanner('התרגול הסתיים - ניתן להתחיל את המבחן האמיתי', 'practice');
+            this.updateLayoutState();
+            this.practiceRunsComplete++;
+            
+            const totalRuns = this.config && this.config.practiceRuns ? this.config.practiceRuns : 1;
+            
+            if(this.practiceRunsComplete < totalRuns){
+                this.setStatus(`תרגול ${this.practiceRunsComplete} מתוך ${totalRuns} הסתיים. מתחיל תרגול נוסף...`, 'success');
+                setTimeout(()=> this.startPractice(), 2000);
+                return;
             }
-            this.toggleRealStartButton(true,false);
-            this.setCountdown(null);
-            this.clearCountdown();
+
+            if(!skipMessage){
+                this.showEndPracticeModal(() => this.startRealCountdown());
+            }
+            
             this.updateStatsVisibility();
             if(!keepFullscreen && window.exitFullscreenMode) window.exitFullscreenMode();
         }
         startRealCountdown(){
-            if(this.stage==='real' || this.stage==='countdown' || this.stage==='done') return;
-            if(!this.practiceDone){
-                this.teardownRun();
-                this.finishPractice({ skipMessage:true, keepFullscreen:true });
-            }
-            this.stage='countdown';
-            this.mode=null;
-            this.setBanner('ספירה לאחור למבחן האמיתי', 'countdown');
-            this.toggleRealStartButton(true,true);
-            this.countdownRemaining=10;
-            const label=this.countdownRemaining===1?'שנייה':'שניות';
-            this.setCountdown(`המבחן האמיתי יתחיל בעוד ${this.countdownRemaining} ${label}`);
-            this.setStatus('המבחן האמיתי יתחיל בעוד 10 שניות. התכוננו!', 'pending');
-            if(window.enterFullscreenMode) window.enterFullscreenMode();
-            this.clearCountdown();
-            this.applyInteractionLock('countdown');
-            this.countdownTimer=setInterval(()=>{
-                this.countdownRemaining--;
-                if(this.countdownRemaining>0){
-                    const lbl=this.countdownRemaining===1?'שנייה':'שניות';
-                    this.setCountdown(`המבחן האמיתי יתחיל בעוד ${this.countdownRemaining} ${lbl}`);
-                } else {
-                    this.clearCountdown();
-                    this.setCountdown(null);
-                    this.startRealTest();
-                }
-            },1000);
+            // Deprecated - handled by modal now, but kept for fallback
+            this.startRealTest();
         }
         startRealTest(){
-            this.clearCountdown();
-            this.setCountdown(null);
-            this.toggleRealStartButton(false);
+            if(this.countdownTimer) clearInterval(this.countdownTimer);
             this.stage='real';
             this.mode='real';
-            this.setBanner('מבחן אמיתי - התוצאות נשמרות', 'real');
+            this.updateLayoutState();
+            
+            // Re-attach HUDs
+            if(window.timerHUD && window.timerHUD.attach) {
+                window.timerHUD.attach(null); // Detach timer for real test
+                window.timerHUD.hide();
+            }
+            if(window.practiceBanner && window.practiceBanner.attach) {
+                window.practiceBanner.attach(document.getElementById('tracking-practice-slot'));
+                window.practiceBanner.show({
+                    label: 'מבחן אמיתי',
+                    description: 'התוצאות נשמרות',
+                    mode: 'real'
+                });
+            }
+
+            // if(window.practiceBanner) window.practiceBanner.hide(); // Removed to keep banner visible
             this.setStatus('מבחן אמיתי: שמור את הסמן והקלד במדויק', 'info');
             this.updateStatsVisibility();
             this.startRun('real');
         }
         startRun(mode='real'){
             if(this.running) return;
-            this.reloadConfig();
+            this.reloadConfig(mode);
             if (window.enterFullscreenMode) window.enterFullscreenMode();
             this.resize();
             requestAnimationFrame(()=>this.resize());
@@ -239,9 +345,34 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.loop();
         }
         start(){ this.startRun('real'); }
-        start(){ if(this.running) return; this.reloadConfig(); if (window.enterFullscreenMode) window.enterFullscreenMode(); this.resize(); requestAnimationFrame(()=>this.resize()); this.resetState(); this.createNumberBox(); this.initTargetVelocity(); if(window.testAuth && !window.testAuth.isAdmin()){ this.statsBox.style.display='none'; } else { this.statsBox.style.display='block'; } this.running=true; this.startTime=performance.now(); this.lastTime=this.startTime; this.numberStartTime=this.startTime; this.totalNumbers=Math.floor((this.duration/1000)/(this.numberTimeout/1000)); this.loop(); }
         resetState(){ this.inTime=0; this.outs=0; this.lastInside=false; this.currentNumber=1; this.previousNumber=0; this.correctClicks=0; this.wrongClicks=0; this.missedNumbers=0; this.numberHistory=[]; this.lastKeyFeedback=null; if(this.numberBoxEl){ this.numberBoxEl.remove(); this.numberBoxEl=null; } }
-        loop(){ if(!this.running) return; const now=performance.now(); const dt=(now-this.lastTime)/1000; this.lastTime=now; this.target.x+=this.target.vx*dt; this.target.y+=this.target.vy*dt; if(this.target.x<this.target.r || this.target.x>this.canvas.width-this.target.r){ this.target.vx*=-1; this.target.x=clamp(this.target.x, this.target.r, this.canvas.width-this.target.r); } if(this.target.y<this.target.r || this.target.y>this.canvas.height-this.target.r){ this.target.vy*=-1; this.target.y=clamp(this.target.y, this.target.r, this.canvas.height-this.target.r); } normalizeVelocity(this.target, this.speed); this.draw(); if(this.lastInside) this.inTime+=dt; this.checkNumberTimeout(); this.updateStats(now); if(now-this.startTime>=this.duration){ this.finish(); return; } this.animId=requestAnimationFrame(()=>this.loop()); }
+        loop(){ 
+            if(!this.running) return; 
+            const now=performance.now(); 
+            const dt=(now-this.lastTime)/1000; 
+            this.lastTime=now; 
+            
+            // Update Timer HUD
+            const elapsed = now - this.startTime;
+            const remaining = Math.max(0, (this.duration - elapsed) / 1000);
+            if(window.timerHUD && this.mode === 'practice') {
+                const m = Math.floor(remaining / 60);
+                const s = Math.floor(remaining % 60);
+                window.timerHUD.update(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            }
+
+            this.target.x+=this.target.vx*dt; 
+            this.target.y+=this.target.vy*dt; 
+            if(this.target.x<this.target.r || this.target.x>this.canvas.width-this.target.r){ this.target.vx*=-1; this.target.x=clamp(this.target.x, this.target.r, this.canvas.width-this.target.r); } 
+            if(this.target.y<this.target.r || this.target.y>this.canvas.height-this.target.r){ this.target.vy*=-1; this.target.y=clamp(this.target.y, this.target.r, this.canvas.height-this.target.r); } 
+            normalizeVelocity(this.target, this.speed); 
+            this.draw(); 
+            if(this.lastInside) this.inTime+=dt; 
+            this.checkNumberTimeout(); 
+            this.updateStats(now); 
+            if(now-this.startTime>=this.duration){ this.finish(); return; } 
+            this.animId=requestAnimationFrame(()=>this.loop()); 
+        }
         handleMove(e){ if(!this.running) return; const rect=this.canvas.getBoundingClientRect(); const x=(e.clientX-rect.left)*(this.canvas.width/rect.width); const y=(e.clientY-rect.top)*(this.canvas.height/rect.height); const inside=insideCircle(x,y,this.target.x,this.target.y,this.target.r); if(inside!==this.lastInside){ if(this.lastInside&&!inside) this.outs++; this.lastInside=inside; } }
         draw(){ if(!this.ctx) return; this.ctx.fillStyle='#0f172a'; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); this.ctx.beginPath(); this.ctx.arc(this.target.x,this.target.y,this.target.r,0,Math.PI*2); this.ctx.fillStyle='#4CAF50'; this.ctx.fill(); this.ctx.lineWidth=4; this.ctx.strokeStyle=this.lastInside?'#00bcd4':'#f44336'; this.ctx.stroke(); }
         updateStats(now){ const elapsed=(now-this.startTime)/1000; const scaleRange=window.getGlobalScale? window.getGlobalScale(): {min:1,max:7}; const scores=computeTrackingScores({ inTimeSec:this.inTime, totalElapsedSec:elapsed, outs:this.outs, correct:this.correctClicks, wrong:this.wrongClicks, missed:this.missedNumbers }, scaleRange); this.inEl.textContent=scores.insidePercent.toFixed(1)+'%'; this.outsEl.textContent=this.outs; if(!(window.testAuth && !window.testAuth.isAdmin())){ this.scoreEl.textContent=`${scores.finalRaw.toFixed(0)} (מעקב:${scores.trackingScore.toFixed(0)} | מספרים:${scores.clickAccuracy.toFixed(0)})`; } }
@@ -255,12 +386,12 @@ import { computeTrackingScores } from './tracking.scoring.js';
                 return;
             }
             this.stage='done';
+            this.updateLayoutState();
             if (window.exitFullscreenMode) window.exitFullscreenMode();
             if(window.testsCore){ window.testsCore.completeTest('tracking', scores.finalRaw, scores.scaled, {outs:this.outs, correct:this.correctClicks, wrong:this.wrongClicks, missed:this.missedNumbers}); }
                 if(window.testAuth){ window.testAuth.showTestCompleteModal('tracking', scores.scaled.toFixed(2)); }
-            this.setBanner('המבחן האמיתי הסתיים', 'done');
-            this.setCountdown(null);
-            this.toggleRealStartButton(false);
+            
+            if(window.practiceBanner) window.practiceBanner.hide();
             this.setStatus('המבחן הסתיים.', 'success');
         }
     }

@@ -11,5 +11,10 @@ export function getNorthfindConfig(){
   const mapImages = Array.isArray(northBase.mapImages) && northBase.mapImages.length
     ? northBase.mapImages.filter(Boolean)
     : mapEntries.map(entry=> entry && (entry.publicUrl || entry.storagePath || entry.url)).filter(Boolean);
-  return { trials, learnSec, spinSec, answerSec, numArrows, mapImages };
+
+  const practiceSeconds = testBase.practiceSeconds ? Math.max(5, +testBase.practiceSeconds) : 30;
+  const practiceRuns = typeof testBase.practiceRuns !== 'undefined' ? Math.max(0, +testBase.practiceRuns) : 1;
+  const examCountdownSec = typeof testBase.examCountdownSec !== 'undefined' ? Math.max(0, +testBase.examCountdownSec) : 10;
+
+  return { trials, learnSec, spinSec, answerSec, numArrows, mapImages, practiceSeconds, practiceRuns, examCountdownSec };
 }

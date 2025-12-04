@@ -9,10 +9,8 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   const totalEl=document.getElementById('northfind-total');
   const avgEl=document.getElementById('northfind-avg');
   const statsBox=document.getElementById('northfind-stats');
-  const phaseBanner=document.getElementById('northfind-phase-banner');
-  const realStartBtn=document.getElementById('northfind-real-start-button');
-  const countdownEl=document.getElementById('northfind-countdown');
   const statusEl=document.getElementById('northfind-status');
+  const layoutEl=document.getElementById('northfind-layout');
   if(!btn||!canvas) return; const ctx=canvas.getContext('2d');
 
   const DEFAULT_MAP_IMAGES = [
@@ -31,40 +29,87 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   let hoveredArrow=null, selectedArrow=null; let arrowPositions=[];
   let stage='idle'; let practiceDone=false; let countdownTimer=null; let countdownRemaining=0; let seriesMode=null;
   let interactionLockToken=null; let trialTimeout=null;
+  let practiceModalEl=null; let prePracticeShown=false;
+  let practiceRunsComplete = 0;
 
-  function setBanner(text, mode){
-    if(!phaseBanner) return;
-    if(!text){
-      phaseBanner.style.display='none';
-      phaseBanner.textContent='';
-      phaseBanner.removeAttribute('data-mode');
-      return;
+  // Attach HUDs
+  if(window.timerHUD && window.timerHUD.attach) {
+      window.timerHUD.attach(document.getElementById('northfind-timer-slot'));
+  }
+  if(window.practiceBanner && window.practiceBanner.attach) {
+      window.practiceBanner.attach(document.getElementById('northfind-practice-slot'));
+  }
+
+  function ensurePracticeModal(){
+    if(practiceModalEl) return practiceModalEl;
+    const overlay=document.createElement('div');
+    overlay.id='northfind-practice-modal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML=`<div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;"></div>`;
+    document.body.appendChild(overlay);
+    practiceModalEl=overlay;
+    return overlay;
+  }
+
+  function showPrePracticeModal(onStart){
+    const modal=ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+        </p>
+        <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+    `;
+    modal.style.display='flex';
+    const startBtn=contentBox.querySelector('[data-action="start-practice"]');
+    if(startBtn){
+        startBtn.onclick=()=>{
+            modal.style.display='none';
+            if(typeof onStart==='function') onStart();
+        };
     }
-    phaseBanner.style.display='block';
-    phaseBanner.textContent=text;
-    if(mode) phaseBanner.setAttribute('data-mode', mode);
-    else phaseBanner.removeAttribute('data-mode');
   }
 
-  function toggleRealStartButton(show, disabled){
-    if(!realStartBtn) return;
-    realStartBtn.style.display = show ? 'inline-flex' : 'none';
-    realStartBtn.disabled = !!disabled;
-  }
-
-  function setCountdown(text){
-    if(!countdownEl) return;
-    if(text){
-      countdownEl.style.display='block';
-      countdownEl.textContent=text;
-    } else {
-      countdownEl.style.display='none';
-      countdownEl.textContent='';
-    }
-  }
-
-  function clearCountdown(){
-    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+  function showEndPracticeModal(onRealStart){
+    const modal = ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">✓</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          כעת נעבור למבחן האמיתי. התוצאות יישמרו.
+        </p>
+        <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">סיימתי תרגול – להתחיל מבחן אמיתי</button>
+    `;
+    modal.style.display = 'flex';
+    
+    const btn = contentBox.querySelector('[data-action="start-real"]');
+    btn.onclick = () => {
+        const countdownSec = cfg && cfg.examCountdownSec ? cfg.examCountdownSec : 0;
+        if(countdownSec > 0){
+            let remaining = countdownSec;
+            contentBox.innerHTML = `
+                <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="nf-modal-countdown">${remaining}</div>
+                <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                <p style="color:#64748b;margin:0">נא להתכונן</p>
+            `;
+            const timer = setInterval(()=>{
+                remaining--;
+                const el = document.getElementById('nf-modal-countdown');
+                if(el) el.textContent = remaining;
+                if(remaining <= 0){
+                    clearInterval(timer);
+                    modal.style.display = 'none';
+                    if(onRealStart) onRealStart();
+                }
+            }, 1000);
+        } else {
+            modal.style.display = 'none';
+            if(onRealStart) onRealStart();
+        }
+    };
   }
 
   function setStatus(text, tone='info'){
@@ -110,15 +155,43 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     else { statsBox.style.display='none'; }
   }
 
-  function startPractice(){
+  function startPractice(isNextRun = false){
     if(stage==='real' || stage==='countdown' || stage==='done') return;
-    if(stage==='practice' && !practiceDone) return;
+    if(stage==='practice' && !practiceDone && !isNextRun) return;
+    
+    if(!isNextRun) {
+        practiceRunsComplete = 0;
+    }
+
     if(window.enterFullscreenMode) window.enterFullscreenMode();
     stage='practice'; practiceDone=false; seriesMode='practice';
-    setBanner('תרגול - התוצאות אינן נשמרות', 'practice');
-    toggleRealStartButton(true,false);
-    setCountdown(null); clearCountdown();
-    setStatus('תרגול: למד את כיוון החץ ובחר את הצפון', 'info');
+    
+    if(layoutEl) layoutEl.setAttribute('data-stage', 'practice');
+
+    // Re-attach HUDs
+    if(window.timerHUD && window.timerHUD.attach) {
+        window.timerHUD.attach(document.getElementById('northfind-timer-slot'));
+    }
+    if(window.practiceBanner && window.practiceBanner.attach) {
+        window.practiceBanner.attach(document.getElementById('northfind-practice-slot'));
+    }
+
+    loadConfig();
+    const totalRuns = (cfg && cfg.practiceRuns) || 1;
+    const currentRun = practiceRunsComplete + 1;
+
+    if(window.practiceBanner) {
+        window.practiceBanner.show({
+            label: 'מצב תרגול',
+            description: 'התוצאות אינן נשמרות',
+            mode: 'practice'
+        });
+    }
+    if(window.timerHUD) {
+        window.timerHUD.show('זמן תרגול', '00:00', 'practice');
+    }
+
+    setStatus(`תרגול ${currentRun}/${totalRuns}: למד את כיוון החץ ובחר את הצפון`, 'info');
     updateStatsVisibility();
     phase='idle';
     startSeries('practice');
@@ -127,14 +200,25 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   function finishPractice(options={}){
     const { skipMessage=false, keepFullscreen=true } = options;
     if(trialTimeout){ clearTimeout(trialTimeout); trialTimeout=null; }
+
+    practiceRunsComplete++;
+    const totalRuns = (cfg && cfg.practiceRuns) || 1;
+    
+    if(practiceRunsComplete < totalRuns) {
+        setStatus(`סבב תרגול ${practiceRunsComplete} הסתיים. מתחיל סבב ${practiceRunsComplete+1}...`, 'info');
+        setTimeout(() => {
+             startPractice(true);
+        }, 1500);
+        return;
+    }
+
     stage='practice'; practiceDone=true; seriesMode=null; phase='idle';
     releaseInteractionLock();
+    
     if(!skipMessage){
-      setStatus('התרגול הסתיים. לחצו על "סיימתי תרגול – להתחיל מבחן אמיתי" כדי להמשיך.', 'info');
-      setBanner('התרגול הסתיים - ניתן להתחיל את המבחן האמיתי', 'practice');
+        showEndPracticeModal(() => startRealCountdown());
     }
-    toggleRealStartButton(true,false);
-    setCountdown(null); clearCountdown();
+    
     updateStatsVisibility();
     if(trialEl) trialEl.textContent='0';
     if(avgEl) avgEl.textContent='-';
@@ -142,37 +226,33 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   }
 
   function startRealCountdown(){
-    if(stage==='real' || stage==='countdown' || stage==='done') return;
-    if(!practiceDone){
-      finishPractice({ skipMessage:true, keepFullscreen:true });
-    }
-    stage='countdown'; seriesMode=null;
-    setBanner('ספירה לאחור למבחן האמיתי', 'countdown');
-    toggleRealStartButton(true,true);
-    countdownRemaining=10;
-    const label=countdownRemaining===1?'שנייה':'שניות';
-    setCountdown(`המבחן האמיתי יתחיל בעוד ${countdownRemaining} ${label}`);
-    setStatus('המבחן האמיתי יתחיל בעוד 10 שניות. התכוננו!', 'pending');
-    if(window.enterFullscreenMode) window.enterFullscreenMode();
-    clearCountdown();
-    applyInteractionLock('countdown');
-    countdownTimer=setInterval(()=>{
-      countdownRemaining--;
-      if(countdownRemaining>0){
-        const lbl=countdownRemaining===1?'שנייה':'שניות';
-        setCountdown(`המבחן האמיתי יתחיל בעוד ${countdownRemaining} ${lbl}`);
-      } else {
-        clearCountdown(); setCountdown(null);
-        startRealTest();
-      }
-    },1000);
+    // Deprecated - handled by modal now
+    startRealTest();
   }
 
   function startRealTest(){
-    clearCountdown(); setCountdown(null);
-    toggleRealStartButton(false);
+    if(countdownTimer) clearInterval(countdownTimer);
     stage='real'; seriesMode='real';
-    setBanner('מבחן אמיתי - התוצאות נשמרות', 'real');
+    
+    if(layoutEl) layoutEl.setAttribute('data-stage', 'practice');
+
+    // Re-attach HUDs
+    if(window.timerHUD && window.timerHUD.attach) {
+        window.timerHUD.attach(document.getElementById('northfind-timer-slot'));
+    }
+    if(window.practiceBanner && window.practiceBanner.attach) {
+        window.practiceBanner.attach(document.getElementById('northfind-practice-slot'));
+    }
+
+    if(window.practiceBanner) {
+        window.practiceBanner.show({
+            label: 'מבחן אמת',
+            description: 'בהצלחה!',
+            mode: 'real'
+        });
+    }
+    if(window.timerHUD) window.timerHUD.hide();
+    
     setStatus('מבחן אמיתי: למד את החץ ובחר במדויק את הצפון.', 'info');
     updateStatsVisibility();
     phase='idle';
@@ -200,7 +280,7 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     startTrial();
   }
 
-  function resize(){ const size=Math.floor(window.innerHeight*0.8); canvas.width=size; canvas.height=size; mapRadius=Math.min(canvas.width,canvas.height)*0.35; }
+  function resize(){ const size=Math.floor(Math.min(window.innerWidth*0.9, window.innerHeight*0.8)); canvas.width=size; canvas.height=size; canvas.style.width=size+'px'; canvas.style.height=size+'px'; mapRadius=Math.min(canvas.width,canvas.height)*0.35; }
   resize(); window.addEventListener('resize',()=> phase!=='idle' && resize());
 
   function loadConfig(){ 
@@ -266,19 +346,37 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
 
   function drawSelectionArrows(){ computeArrowPositions(); arrowPositions.forEach(p=>{ const sz=16; let bg='#1e3a8a'; if(selectedArrow===p.i) bg='#facc15'; else if(hoveredArrow===p.i) bg='#10b981'; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle); ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(0,0,sz+8,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(-sz*.8,0); ctx.lineTo(sz*.3,0); ctx.stroke(); const tip=sz+4, base=sz*.65; ctx.translate(-tip/2,0); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(tip,0); ctx.lineTo(0,base); ctx.lineTo(0,-base); ctx.closePath(); ctx.fill(); ctx.strokeStyle= selectedArrow===p.i? '#854d0e':'#1e293b'; ctx.lineWidth=1.5; ctx.stroke(); ctx.restore(); }); }
 
-  function drawTimer(rem,total){
-    const size=84, pad=16, cx=pad+size/2, cy=pad+size/2, ratio=Math.max(0,rem/total);
-    ctx.save(); ctx.translate(cx,cy);
-    ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.arc(0,0,size/2,0,Math.PI*2); ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,size/2-2,0,Math.PI*2); ctx.stroke();
-    ctx.strokeStyle='#10b981'; ctx.lineWidth=8; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(0,0,size/2-10,-Math.PI/2,-Math.PI/2+2*Math.PI*ratio); ctx.stroke();
-    ctx.fillStyle='#ffffff'; ctx.font='600 17px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(rem.toFixed(1)+'s',0,2);
-    ctx.restore();
+  function render(){ 
+      ctx.clearRect(0,0,canvas.width,canvas.height); 
+      ctx.fillStyle='#1e293b'; 
+      ctx.fillRect(0,0,canvas.width,canvas.height); 
+      drawMap(); 
+      
+      if(phase==='learn'){ 
+          const el=(performance.now()-phaseStartTime)/1000; 
+          drawLearningArrow(); 
+          
+          // Update HUD
+          if(window.timerHUD) {
+              const rem = Math.max(0, learnSec - el);
+              window.timerHUD.update(rem.toFixed(1) + 's');
+          }
+      } else if(phase==='answer'){ 
+          const el=(performance.now()-phaseStartTime)/1000; 
+          drawSelectionArrows(); 
+          
+          // Update HUD
+          if(window.timerHUD) {
+              const rem = Math.max(0, answerSec - el);
+              window.timerHUD.update(rem.toFixed(1) + 's');
+          }
+          
+          ctx.fillStyle='#fff'; 
+          ctx.font='bold 20px system-ui'; 
+          ctx.textAlign='center'; 
+          ctx.fillText('בחר לאן החץ מצביע', canvas.width/2, canvas.height-40); 
+      } 
   }
-
-  function drawBanner(main,sub){ const h=78,w=Math.min(canvas.width*.72,620),x=(canvas.width-w)/2,y=15; ctx.save(); ctx.fillStyle='rgba(59,130,246,0.9)'; if(ctx.roundRect) ctx.roundRect(x,y,w,h,20); else ctx.fillRect(x,y,w,h); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=3; ctx.strokeRect(x,y,w,h); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 26px system-ui'; ctx.fillText(main,x+w/2,y+h/2-8); if(sub){ ctx.font='15px system-ui'; ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fillText(sub,x+w/2,y+h/2+18); } ctx.restore(); }
-
-  function render(){ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle='#1e293b'; ctx.fillRect(0,0,canvas.width,canvas.height); drawMap(); if(phase==='learn'){ const el=(performance.now()-phaseStartTime)/1000; drawLearningArrow(); drawTimer(Math.max(0,learnSec-el),learnSec); drawBanner('למד את מיקום החץ','בסיום החץ ייעלם והמפה תסתובב'); } else if(phase==='answer'){ const el=(performance.now()-phaseStartTime)/1000; drawSelectionArrows(); drawTimer(Math.max(0,answerSec-el),answerSec); ctx.fillStyle='#fff'; ctx.font='bold 20px system-ui'; ctx.textAlign='center'; ctx.fillText('בחר לאן החץ מצביע', canvas.width/2, canvas.height-40); } }
 
   function step(){ if(phase==='idle'||phase==='done') return; const elapsed=(performance.now()-phaseStartTime)/1000; if(phase==='learn'){ if(elapsed>=learnSec){ startSpinPhase(); return; } render(); requestAnimationFrame(step); } else if(phase==='spin'){ const t=Math.min(1,elapsed/spinSec); mapRotation = finalRotation * (1 - Math.pow(1-t,3)); if(elapsed>=spinSec){ mapRotation=finalRotation; startAnswerPhase(); return; } render(); requestAnimationFrame(step); } else if(phase==='answer'){ if(elapsed>=answerSec){ registerAnswer(null,true); return; } render(); requestAnimationFrame(step); } }
 
@@ -330,8 +428,9 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     const rawPercent = ((avg - g.min)/(g.max-g.min))*100;
     if(window.testsCore){ window.testsCore.completeTest('northfind', rawPercent, avg, {trials:answers.length}); }
     if(window.testAuth){ window.testAuth.showTestCompleteModal('northfind', avg.toFixed(2)); }
-    setBanner('המבחן האמיתי הסתיים', 'done');
-    setCountdown(null); toggleRealStartButton(false);
+    
+    if(window.practiceBanner) window.practiceBanner.hide();
+    
     setStatus('המבחן הסתיים.', 'success');
     releaseInteractionLock();
   }
@@ -341,8 +440,14 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
 
   function start(){ if(phase!=='idle') return; if(window.enterFullscreenMode) window.enterFullscreenMode(); loadConfig(); answers=[]; currentTrial=0; mapRotation=0; finalRotation=0; selectedArrow=null; hoveredArrow=null; resize(); if(window.testAuth && !window.testAuth.isAdmin()) statsBox && (statsBox.style.display='none'); else statsBox && (statsBox.style.display='block'); totalEl && (totalEl.textContent=trials); startTrial(); }
 
-  btn.addEventListener('click', startPractice);
-  if(realStartBtn) realStartBtn.addEventListener('click', startRealCountdown);
+  btn.addEventListener('click', () => {
+    if(!prePracticeShown){
+        prePracticeShown=true;
+        showPrePracticeModal(startPractice);
+    } else {
+        startPractice();
+    }
+  });
   canvas.addEventListener('mousemove', mouseMove); canvas.addEventListener('click', click);
   document.addEventListener('DOMContentLoaded',()=>{ if(window.testsCore) window.testsCore.registerTest('northfind',{title:'מציאת הצפון'}); });
 })();

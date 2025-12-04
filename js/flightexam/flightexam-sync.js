@@ -2,15 +2,35 @@
 // סנכרון חלקי מבחן הטיסה מול דלי Supabase - SERVER ONLY
 (function(){
   const BUCKET = 'flightexam';
+  const STORAGE_KEY = 'app.flightexam.parts';
   if(!window.supabaseClient){ console.error('[flight-sync] Supabase client missing - cannot proceed'); }
 
-  function markPracticePart(parts){
-    if(!Array.isArray(parts)) return [];
-    parts.forEach((part, idx)=>{
+  function readStoredFlightExam(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw? JSON.parse(raw) : {};
+    } catch(err){
+      console.warn('[flight-sync] failed to parse stored flight exam config', err);
+      return {};
+    }
+  }
+
+  function normalizePracticeList(list, availableSet){
+    if(!Array.isArray(list)) return [];
+    return list
+      .map(n=>Number(n))
+      .filter(num=>Number.isFinite(num) && (!availableSet || availableSet.has(num)));
+  }
+
+  function decoratePartsWithPractice(parts, practiceList){
+    const set = new Set(practiceList.map(Number).filter(Number.isFinite));
+    parts.forEach(part=>{
       if(!part) return;
-      const isPractice = idx === 0;
+      const partNum = Number(part.partNumber ?? part.part_number);
+      const isPractice = set.has(partNum);
       part.isPractice = isPractice;
       part.partType = isPractice? 'practice':'exam';
+      part.isExample = isPractice;
     });
     return parts;
   }
@@ -25,14 +45,30 @@
       if(api.loading) return;
       api.loading=true;
       try {
-        const { data, error } = await window.supabaseClient
+        // Try to fetch with is_example column
+        let { data, error } = await window.supabaseClient
           .from('flight_exam_parts')
-          .select('part_number,name,path_img_path,test_img_path,path_img_w,path_img_h,test_img_w,test_img_h,path_points')
+          .select('part_number,name,path_img_path,test_img_path,path_img_w,path_img_h,test_img_w,test_img_h,path_points,is_example')
           .order('part_number',{ascending:true});
+
+        // If error suggests missing column, fallback to legacy schema
+        let isLegacy = false;
+        if(error && (error.code === '42703' || error.message.includes('column') || error.message.includes('does not exist'))){
+             console.warn('[flight-sync] is_example column missing in DB, falling back to legacy schema');
+             isLegacy = true;
+             const res = await window.supabaseClient
+              .from('flight_exam_parts')
+              .select('part_number,name,path_img_path,test_img_path,path_img_w,path_img_h,test_img_w,test_img_h,path_points')
+              .order('part_number',{ascending:true});
+             data = res.data;
+             error = res.error;
+        }
+
         if(error){ throw new Error('שגיאה בטעינת חלקי מבחן הטיסה: ' + error.message); }
         if(!data || !data.length){
           throw new Error('לא נמצאו חלקי מבחן טיסה בשרת.');
         }
+        
         const bucketRef = window.supabaseClient.storage.from(BUCKET);
         const parts = data.map(r=>{
           const pathPublicRaw = bucketRef.getPublicUrl(r.path_img_path).data.publicUrl;
@@ -40,6 +76,7 @@
           const bust = cacheBust? ('?v=' + Date.now()) : '';
           const pathPublic = pathPublicRaw + bust;
           const testPublic = testPublicRaw + bust;
+          
           return {
             id:'db_'+r.part_number,
             partNumber: r.part_number,
@@ -50,17 +87,50 @@
             pathH:r.path_img_h||0,
             testW:r.test_img_w||0,
             testH:r.test_img_h||0,
-            pathPoints:Array.isArray(r.path_points)? r.path_points : (r.path_points || [])
+            pathPoints:Array.isArray(r.path_points)? r.path_points : (r.path_points || []),
+            isExample: !!r.is_example
           };
         });
-        // שמירה ל-localStorage
-        const normalized = markPracticePart(parts.slice());
-        const current = {parts: normalized};
-        localStorage.setItem('app.flightexam.parts', JSON.stringify(current));
-        api.lastLoadCount = normalized.length;
-        console.log('[flight-sync] loaded parts from DB:', normalized.length);
+
+        const storedConfig = readStoredFlightExam();
+        const availableNums = parts.map(p=>Number(p.partNumber)).filter(Number.isFinite);
+        const availableSet = new Set(availableNums);
+
+        let practiceParts = normalizePracticeList(storedConfig.practiceParts, availableSet);
+
+        if(!practiceParts.length && Array.isArray(storedConfig.parts)){
+          const legacyLocal = storedConfig.parts
+            .filter(p=>p && (p.isPractice || p.isExample))
+            .map(p=>Number(p.partNumber ?? p.part_number))
+            .filter(Number.isFinite);
+          practiceParts = normalizePracticeList(legacyLocal, availableSet);
+        }
+
+        if(!practiceParts.length && !isLegacy){
+          const dbExamples = data
+            .filter(row=>row && row.is_example === true)
+            .map(row=>Number(row.part_number))
+            .filter(Number.isFinite);
+          practiceParts = normalizePracticeList(dbExamples, availableSet);
+        }
+
+        if(!practiceParts.length && availableNums.length){
+          practiceParts = [availableNums[0]];
+        }
+
+        const practiceCount = Math.max(1, Number(storedConfig.practiceCount) || 1);
+        decoratePartsWithPractice(parts, practiceParts);
+
+        const current = {
+          parts,
+          practiceParts,
+          practiceCount
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+        api.lastLoadCount = parts.length;
+        console.log('[flight-sync] loaded parts from DB:', parts.length);
         if(window.renderNewExamParts) window.renderNewExamParts();
-        return normalized;
+        return parts;
       } catch(e){
         console.error('[flight-sync] load error', e);
         throw e;
@@ -102,7 +172,7 @@
         const { error:insErr } = await window.supabaseClient.from('flight_exam_parts').insert(row);
         if(insErr){ throw new Error(insErr.message); }
         console.log('[flight-sync] uploaded new part', nextNum);
-        await api.loadFromDb();
+        await api.loadFromDb(true);
         alert('✓ חלק '+nextNum+' הועלה ונשמר');
       } catch(e){ console.error('[flight-sync] upload error', e); throw e; }
     },
@@ -124,8 +194,9 @@
         
         const part = data[0];
         const bucketRef = window.supabaseClient.storage.from(BUCKET);
-        const pathUrl = bucketRef.getPublicUrl(part.path_img_path).data.publicUrl;
-        const testUrl = bucketRef.getPublicUrl(part.test_img_path).data.publicUrl;
+        const bust = '?v=' + Date.now();
+        const pathUrl = bucketRef.getPublicUrl(part.path_img_path).data.publicUrl + bust;
+        const testUrl = bucketRef.getPublicUrl(part.test_img_path).data.publicUrl + bust;
         
         // פתיחת מודאל עריכה
         openEditModal({
@@ -245,7 +316,7 @@
           if(remErr){ console.warn('[flight-sync] file removal warning', remErr); }
         }
         console.log('[flight-sync] deleted part', num);
-        await api.loadFromDb();
+        await api.loadFromDb(true);
         alert('✓ חלק '+num+' נמחק');
       } catch(e){ console.error('[flight-sync] delete error', e); throw e; }
     },
@@ -258,6 +329,45 @@
           .eq('part_number', partNumber);
         console.log('[flight-sync] updated path_points for part', partNumber, points.length);
       } catch(e){ console.warn('[flight-sync] updatePartPoints error', e); }
+    },
+    async setPracticePart(partNumber){
+      if(!window.supabaseClient){ throw new Error('Supabase לא מאותחל'); }
+      try {
+        // Optimistic update to localStorage to handle race conditions with DB replication
+        try {
+          const localStr = localStorage.getItem(STORAGE_KEY);
+          if(localStr){
+            const localData = JSON.parse(localStr);
+            if(localData && Array.isArray(localData.parts)){
+              const selected = Number(partNumber);
+              localData.practiceParts = Number.isFinite(selected)? [selected]: [];
+              decoratePartsWithPractice(localData.parts, localData.practiceParts);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+              console.log('[flight-sync] Optimistic local update for practice part:', partNumber);
+            }
+          }
+        } catch(e){ console.warn('[flight-sync] optimistic update failed', e); }
+
+        // 1. Reset all to false
+        await window.supabaseClient
+          .from('flight_exam_parts')
+          .update({ is_example: false })
+          .neq('part_number', -1); // Update all
+
+        // 2. Set target to true
+        const { error } = await window.supabaseClient
+          .from('flight_exam_parts')
+          .update({ is_example: true })
+          .eq('part_number', partNumber);
+
+        if(error) throw error;
+        
+        console.log('[flight-sync] set practice part', partNumber);
+        await api.loadFromDb(true);
+      } catch(e){
+        console.error('[flight-sync] setPracticePart error', e);
+        throw e;
+      }
     }
   };
 
@@ -492,11 +602,11 @@
 
   document.addEventListener('click', e=>{
     const btn=e.target.closest('.admin-tab-btn[data-admin-tab="flightexam"]');
-    if(btn){ setTimeout(()=> api.loadFromDb().catch(err => alert('❌ '+err.message)), 150); }
+    if(btn){ setTimeout(()=> api.loadFromDb(true).catch(err => alert('❌ '+err.message)), 150); }
   });
   setTimeout(()=>{
     const activeTab=document.querySelector('.admin-tab-btn.active[data-admin-tab="flightexam"]');
-    if(activeTab) api.loadFromDb().catch(err => console.error('[flight-sync]', err));
+    if(activeTab) api.loadFromDb(true).catch(err => console.error('[flight-sync]', err));
   },600);
 
   function invokeFlightPathEditor(part, showAlertIfMissing){
@@ -555,18 +665,26 @@
   window.refreshFlightExamPartsFromDb = function(){ return api.loadFromDb(true); };
   
   // פונקציה לקבלת חלקים מה-localStorage
-  window.getFlightExamParts = function() {
-    try {
-      const stored = localStorage.getItem('app.flightexam.parts');
-      if (!stored) {
-        console.warn('[flight-sync] No parts in localStorage');
+  if(typeof window.getFlightExamParts !== 'function'){
+    window.getFlightExamParts = function() {
+      try {
+        const parsed = readStoredFlightExam();
+        if (!parsed || !Array.isArray(parsed.parts)) {
+          console.warn('[flight-sync] No parts in localStorage');
+          return [];
+        }
+        const availableSet = new Set(
+          parsed.parts
+            .map(p=>Number(p.partNumber ?? p.part_number))
+            .filter(Number.isFinite)
+        );
+        const practiceParts = normalizePracticeList(parsed.practiceParts, availableSet);
+        const cloned = parsed.parts.map(part=> Object.assign({}, part));
+        return decoratePartsWithPractice(cloned, practiceParts);
+      } catch (e) {
+        console.error('[flight-sync] Error reading parts from localStorage', e);
         return [];
       }
-      const parsed = JSON.parse(stored);
-      return markPracticePart((parsed.parts || []).slice());
-    } catch (e) {
-      console.error('[flight-sync] Error reading parts from localStorage', e);
-      return [];
-    }
-  };
+    };
+  }
 })();

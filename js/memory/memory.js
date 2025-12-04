@@ -20,9 +20,8 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.livesEl = document.getElementById('memory-lives');
             this.messageEl = document.getElementById('memory-message');
             this.statsBox = document.getElementById('memory-stats');
-            this.phaseBanner = document.getElementById('memory-phase-banner');
-            this.realStartBtn = document.getElementById('memory-real-start-button');
-            this.countdownEl = document.getElementById('memory-countdown');
+            this.countdownEl = document.getElementById('memory_countdown');
+            this.practiceModalEl = null;
 
             this.nodes = [];
             this.sequence = [];
@@ -42,14 +41,26 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.timeLimitMs = 0;
             this.retryDelaySec = 10;
             this.startTime = 0;
+            this.prePracticeShown = false;
 
             this.bind();
         }
 
         bind(){
             const btn = document.getElementById('start-memory-button');
-            if(btn) btn.addEventListener('click', ()=> this.startPractice());
-            if(this.realStartBtn) this.realStartBtn.addEventListener('click', ()=> this.startRealCountdown());
+            if(btn) {
+                btn.addEventListener('click', ()=> {
+                    this.reloadConfig();
+                    // Check if practice is enabled in config (default true)
+                    const practiceEnabled = this.config.practiceEnabled !== false;
+                    if (practiceEnabled && !this.prePracticeShown) {
+                        this.prePracticeShown = true;
+                        this.showPrePracticeModal(() => this.startPractice());
+                    } else {
+                        this.startPractice();
+                    }
+                });
+            }
             this.renderPad();
         }
 
@@ -81,26 +92,29 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
         }
 
         setBanner(text, mode){
-            if(!this.phaseBanner) return;
+            // Use global practice banner for consistent UI
+            if(!window.practiceBanner) return;
             if(!text){
-                this.phaseBanner.style.display='none';
-                this.phaseBanner.textContent='';
-                this.phaseBanner.removeAttribute('data-mode');
+                window.practiceBanner.hide();
                 return;
             }
-            this.phaseBanner.style.display='block';
-            this.phaseBanner.textContent = text;
-            if(mode){
-                this.phaseBanner.setAttribute('data-mode', mode);
-            } else {
-                this.phaseBanner.removeAttribute('data-mode');
-            }
-        }
-
-        toggleRealStartButton(show, disabled=false){
-            if(!this.realStartBtn) return;
-            this.realStartBtn.style.display = show ? 'inline-flex' : 'none';
-            this.realStartBtn.disabled = !!disabled;
+            const labels = {
+                'practice': 'מצב תרגול',
+                'countdown': 'ספירה לאחור',
+                'real': 'מבחן אמיתי',
+                'done': 'הסתיים'
+            };
+            const descriptions = {
+                'practice': 'התוצאות אינן נשמרות',
+                'countdown': 'המבחן האמיתי עומד להתחיל',
+                'real': 'התוצאות נשמרות',
+                'done': ''
+            };
+            window.practiceBanner.show({
+                label: labels[mode] || text,
+                description: descriptions[mode] || '',
+                mode: mode || 'practice'
+            });
         }
 
         setCountdown(text){
@@ -134,6 +148,110 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             }
         }
 
+        ensurePracticeModal(){
+            if(this.practiceModalEl) return this.practiceModalEl;
+            const overlay=document.createElement('div');
+            overlay.id='memory-practice-modal';
+            overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
+            overlay.innerHTML=`
+              <div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
+                <div style="font-size:2.6rem;margin-bottom:12px">🧠</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
+                </p>
+                <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+              </div>`;
+            document.body.appendChild(overlay);
+            this.practiceModalEl=overlay;
+            return overlay;
+        }
+
+        showPracticeModal(onContinue){
+            const modal=this.ensurePracticeModal();
+            const contentBox = modal.querySelector('div');
+            contentBox.innerHTML = `
+                <div style="font-size:2.6rem;margin-bottom:12px">🧠</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
+                </p>
+                <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+            `;
+            modal.style.display='flex';
+            const confirmBtn=modal.querySelector('[data-action="confirm"]');
+            if(confirmBtn){
+                confirmBtn.onclick=()=>{
+                    // Use config for countdown duration
+                    const countdownSec = (this.config && typeof this.config.examCountdownSec === 'number') ? this.config.examCountdownSec : 5;
+
+                    if (countdownSec > 0) {
+                        let remaining = countdownSec;
+                        contentBox.innerHTML = `
+                            <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="memory-modal-countdown">${remaining}</div>
+                            <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                            <p style="color:#64748b;margin:0">נא להתכונן</p>
+                        `;
+                        
+                        const timer = setInterval(() => {
+                            remaining--;
+                            const el = document.getElementById('memory-modal-countdown');
+                            if(el) el.textContent = remaining;
+                            
+                            if (remaining <= 0) {
+                                clearInterval(timer);
+                                modal.style.display = 'none';
+                                if(typeof onContinue==='function') onContinue();
+                            }
+                        }, 1000);
+                    } else {
+                        modal.style.display='none';
+                        if(typeof onContinue==='function') onContinue();
+                    }
+                };
+            }
+        }
+
+        showPrePracticeModal(onStart){
+            const modal=this.ensurePracticeModal();
+            const contentBox = modal.querySelector('div'); // The inner div
+            
+            // Save original content to restore later if needed, or just overwrite
+            // Since ensurePracticeModal creates a specific structure, we can just overwrite the innerHTML of the content box
+            // But wait, ensurePracticeModal returns the overlay. The content box is the first child.
+            
+            // Actually, let's just overwrite the innerHTML of the content div.
+            // The ensurePracticeModal creates: overlay -> div (content)
+            
+            const originalContent = contentBox.innerHTML;
+            
+            contentBox.innerHTML = `
+                <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+                  המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו במשך זמן קצר.
+                </p>
+                <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+            `;
+            
+            modal.style.display='flex';
+            
+            const startBtn=contentBox.querySelector('[data-action="start-practice"]');
+            if(startBtn){
+                startBtn.onclick=()=>{
+                    modal.style.display='none';
+                    // Restore original content structure for the "Practice Finished" modal later
+                    // Or we can just let showPracticeModal overwrite it again when needed.
+                    // showPracticeModal does overwrite it? 
+                    // Let's check showPracticeModal in memory.js
+                    // It calls ensurePracticeModal which creates it if missing.
+                    // But showPracticeModal doesn't seem to set innerHTML every time in the current code?
+                    // Wait, let me check the read_file output for memory.js again.
+                    if(typeof onStart==='function') onStart();
+                };
+            }
+        }
+
         start(){
             this.startPractice();
         }
@@ -144,11 +262,19 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
             if(window.enterFullscreenMode) window.enterFullscreenMode();
 
+            // Re-attach HUDs
+            if(window.timerHUD && window.timerHUD.attach) {
+                window.timerHUD.attach(document.getElementById('memory-timer-slot'));
+            }
+            if(window.practiceBanner && window.practiceBanner.attach) {
+                window.practiceBanner.attach(document.getElementById('memory-practice-slot'));
+            }
+
             this.mode='practice';
+            this.updateLayoutState();
             this.practiceDone = false;
             this.setPadMode('practice');
             this.setBanner('תרגול - הציון לא נשמר', 'practice');
-            this.toggleRealStartButton(true, false);
             this.setCountdown(null);
             this.clearCountdown();
 
@@ -160,11 +286,15 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
             this.updateStatsVisibility();
 
-            this.startTime = 0;
-            clearInterval(this.timerId);
-            this.timerId = null;
+            this.startTime = performance.now();
+            this.timeLimitMs = this.practiceDurationMs;
+            this.startTimer();
 
             this.beginAttempt();
+        }
+
+        _runPracticeStartLogic() {
+            // Deprecated - logic moved back to startPractice
         }
 
         finishPractice(reason, showMessage=true){
@@ -182,61 +312,37 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.userIndex = 0;
             this.updateStats();
             this.setPadMode('practice');
-            this.toggleRealStartButton(true, false);
-            this.setBanner('התרגול הסתיים - ניתן להתחיל את המבחן האמיתי', 'practice');
+            this.setBanner(null); // Hide banner
             this.updateStatsVisibility();
 
             if(showMessage){
-                const msg = reason==='lives'
-                    ? 'התרגול הסתיים. לחצו על "סיימתי תרגול – להתחיל מבחן אמיתי" כשתהיו מוכנים.'
-                    : 'התרגול הסתיים. ניתן להמשיך למבחן האמיתי כשתהיו מוכנים.';
-                this.setStatus(msg, 'info');
+                this.setStatus('', 'muted');
+                this.showPracticeModal(()=>this.startRealTest());
             }
         }
 
         startRealCountdown(){
-            if(this.mode==='real' || this.mode==='countdown' || this.mode==='done') return;
-
-            if(!this.practiceDone){
-                this.finishPractice('manual', false);
-            } else {
-                this.clearPendingTimers();
-                this.cooldownToken++;
-            }
-
-            this.mode='countdown';
-            this.phase='countdown';
-            this.setPadMode('countdown');
-            this.setBanner('ספירה לאחור למבחן האמיתי', 'countdown');
-            this.toggleRealStartButton(true, true);
-            this.countdownRemaining = 10;
-            const initialLabel = this.countdownRemaining === 1 ? 'שנייה' : 'שניות';
-            this.setCountdown(`המבחן האמיתי יתחיל בעוד ${this.countdownRemaining} ${initialLabel}`);
-            this.setStatus('המבחן האמיתי יתחיל בעוד 10 שניות. התכוננו!', 'pending');
-
-            this.clearCountdown();
-            this.countdownTimer = setInterval(()=>{
-                this.countdownRemaining--;
-                if(this.countdownRemaining>0){
-                    const label = this.countdownRemaining === 1 ? 'שנייה' : 'שניות';
-                    this.setCountdown(`המבחן האמיתי יתחיל בעוד ${this.countdownRemaining} ${label}`);
-                } else {
-                    this.clearCountdown();
-                    this.setCountdown(null);
-                    this.startRealTest();
-                }
-            }, 1000);
+            // Deprecated - logic moved to showPracticeModal
+            this.startRealTest();
         }
 
         startRealTest(){
             this.clearPendingTimers();
             this.clearCountdown();
 
+            // Re-attach HUDs
+            if(window.timerHUD && window.timerHUD.attach) {
+                window.timerHUD.attach(document.getElementById('memory-timer-slot'));
+            }
+            if(window.practiceBanner && window.practiceBanner.attach) {
+                window.practiceBanner.attach(document.getElementById('memory-practice-slot'));
+            }
+
             this.mode='real';
+            this.updateLayoutState();
             this.practiceDone = true;
             this.setPadMode('real');
             this.setBanner('מבחן אמיתי - הציון יימדד', 'real');
-            this.toggleRealStartButton(false);
             this.setCountdown(null);
 
             if(window.enterFullscreenMode) window.enterFullscreenMode();
@@ -244,7 +350,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.reloadConfig();
             this.cooldownToken++;
             this.phase='idle';
-            this.setStatus('צפו ברצף והקישו את הצבעים באותו סדר');
+            this.setStatus('צפו ברצף והקישו את הצבעים באותו סדר', 'muted');
 
             this.updateStatsVisibility();
 
@@ -262,6 +368,8 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.sequence = [];
             this.userIndex = 0;
             this.timeLimitMs = (this.config.seconds || 120) * 1000;
+            this.practiceDurationMs = this.config.practiceDurationMs || 45000;
+            this.examCountdownSec = (typeof this.config.examCountdownSec === 'number') ? this.config.examCountdownSec : 5;
             this.updateStats();
         }
 
@@ -380,13 +488,18 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
         startTimer(){
             clearInterval(this.timerId);
-            if(this.mode!=='real') return;
+            if(this.mode!=='real' && this.mode!=='practice') return;
             this.timerId=setInterval(()=>{
                 if(this.phase==='done') return;
                 const elapsed = performance.now() - this.startTime;
                 if(elapsed>=this.timeLimitMs){
-                    this.setStatus('הזמן הסתיים', 'error');
-                    this.finish(true);
+                    if(this.mode==='practice'){
+                        this.setStatus('זמן התרגול הסתיים', 'info');
+                        this.finishPractice('time');
+                    } else {
+                        this.setStatus('הזמן הסתיים', 'error');
+                        this.finish(true);
+                    }
                 }
             }, 300);
         }
@@ -395,6 +508,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             if(this.phase==='done') return;
             this.phase='done';
             this.mode='done';
+            this.updateLayoutState();
             this.clearPendingTimers();
             this.cooldownToken++;
             clearInterval(this.timerId);
@@ -421,6 +535,17 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
                     attemptsUsed: (this.maxLives - this.lives)
                 });
             }
+        }
+
+        updateLayoutState() {
+            const layout = document.getElementById('memory-layout');
+            if (layout) {
+                layout.setAttribute('data-stage', this.mode);
+            }
+        }
+
+        toggleRealStartButton(show) {
+            // Placeholder to prevent crash if called
         }
 
         updateStats(){

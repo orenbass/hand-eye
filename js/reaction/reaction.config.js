@@ -13,10 +13,21 @@ export function getReactionConfig() {
   const targetGoal = 15;
   const minRequired = (targetGoal * 2 - 1) * shapeDisplaySec;
   if (durationSec < minRequired) durationSec = minRequired; // ensure enough timeline for all targets
+
+  // Practice settings
+  const practiceEnabled = baseCfg.enablePractice !== false;
+  const practiceSeconds = baseCfg.practiceSeconds ? Math.max(5, +baseCfg.practiceSeconds) : 20;
+  const practiceRuns = Math.max(1, baseCfg.practiceRuns || 1);
+  const examCountdownSec = Math.max(0, baseCfg.examCountdownSec || 5);
+
   return {
     difficulty,
     shapeDisplaySec,
     durationSec,
-    targetGoal
+    targetGoal,
+    practiceEnabled,
+    practiceDurationMs: practiceSeconds * 1000,
+    practiceRuns,
+    examCountdownSec
   };
 }

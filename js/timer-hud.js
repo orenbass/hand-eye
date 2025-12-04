@@ -74,6 +74,11 @@
       card.style.position = 'fixed';
     } else {
       card.classList.add('inline-mode');
+      card.style.position = '';
+      card.style.top = '';
+      card.style.left = '';
+      card.style.right = '';
+      card.style.transform = '';
     }
   }
 

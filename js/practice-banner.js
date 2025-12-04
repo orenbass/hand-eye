@@ -81,6 +81,12 @@
       el.classList.remove('inline-mode');
     } else {
       el.classList.add('inline-mode');
+      el.style.top = '';
+      el.style.left = '';
+      el.style.right = '';
+      el.style.bottom = '';
+      el.style.transform = '';
+      el.style.position = '';
     }
   }
 

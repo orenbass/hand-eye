@@ -39,6 +39,7 @@
   let answerDeadline = 0;
   let questionLocked = false;
   let practiceModalEl = null;
+  let prePracticeShown = false;
 
   function lockViewport(){
     if(window.enterFullscreenMode){
@@ -62,8 +63,8 @@
     if(window.practiceBanner){
       if(stage === 'practice'){
         window.practiceBanner.show({
-          label: 'מצב תרגול',
-          description: 'השאלות בשלב זה אינן נכנסות לציון'
+        label: 'מצב תרגול',
+         description: 'התוצאות אינן נשמרות',
         });
       } else {
         window.practiceBanner.hide();
@@ -304,9 +305,9 @@
     return {
       displayTimeSec: orientCfg.displayTimeSec || (cfg && cfg.displayTimeSec) || 10,
       maxQuestions: orientCfg.maxQuestions || (cfg && cfg.maxQuestions) || 10,
-      timeLimitMin: orientCfg.timeLimitMin || (cfg && cfg.timeLimitMin) || 6,
       scaleRange,
-      showCompass: orientCfg.showCompass !== false
+      showCompass: orientCfg.showCompass !== false,
+      exampleSets: orientCfg.exampleSets || []
     };
   }
 
@@ -367,12 +368,22 @@
       const sets = await fetchOrientationFromSupabase();
       if(sets && sets.length){
         const ordered = sets.slice().sort((a, b) => (a.test_number || 0) - (b.test_number || 0));
-        const practicePool = ordered.slice(0, PRACTICE_COUNT);
+        
+        let practicePool = [];
+        if(cfg.exampleSets && cfg.exampleSets.length > 0){
+            practicePool = ordered.filter(s => cfg.exampleSets.includes(s.test_number));
+        } else {
+            practicePool = ordered.slice(0, PRACTICE_COUNT);
+        }
+
         practicePool.forEach(set => {
           const q = mapSupabaseSetToQuestion(set, { preferFirst: true });
           if(q) data.practice.push(q);
         });
-        const examPool = ordered.slice(practicePool.length).map(set => mapSupabaseSetToQuestion(set)).filter(Boolean);
+        
+        const examPool = ordered.filter(s => !practicePool.includes(s))
+                                .map(set => mapSupabaseSetToQuestion(set)).filter(Boolean);
+        
         const shuffled = examPool.sort(() => Math.random() - 0.5);
         data.exam = shuffled.slice(0, maxExam);
         if(!data.exam.length && data.practice.length){
@@ -487,12 +498,7 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:14000;display:none;align-items:center;justify-content:center;padding:20px;';
     overlay.innerHTML = `
       <div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;">
-        <div style="font-size:2.4rem;margin-bottom:10px">🧭</div>
-        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
-        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התמונות שתקבלו כעת יספרו לציון הרשמי, לכן ודאו שאתם מוכנים.
-        </p>
-        <button type="button" data-action="confirm" style="padding:12px 20px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+        <!-- Content injected dynamically -->
       </div>`;
     document.body.appendChild(overlay);
     practiceModalEl = overlay;
@@ -501,12 +507,44 @@
 
   function showPracticeModal(onContinue){
     const modal = ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.4rem;margin-bottom:10px">🧭</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התמונות שתקבלו כעת יספרו לציון הרשמי, לכן ודאו שאתם מוכנים.
+        </p>
+        <button type="button" data-action="confirm" style="padding:12px 20px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+    `;
     modal.style.display = 'flex';
     const confirmBtn = modal.querySelector('[data-action="confirm"]');
-    confirmBtn.onclick = () => {
-      modal.style.display = 'none';
-      if(typeof onContinue === 'function') onContinue();
-    };
+    if(confirmBtn){
+        confirmBtn.onclick = () => {
+            modal.style.display = 'none';
+            if(typeof onContinue === 'function') onContinue();
+        };
+    }
+  }
+
+  function showPrePracticeModal(onStart){
+    const modal = ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+        </p>
+        <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+    `;
+    modal.style.display = 'flex';
+    const startBtn = modal.querySelector('[data-action="start-practice"]');
+    if(startBtn){
+        startBtn.onclick = () => {
+            modal.style.display = 'none';
+            if(typeof onStart === 'function') onStart();
+        };
+    }
   }
 
   function getActiveQuestion(){
@@ -806,6 +844,12 @@
 
   async function start(){
     if(startBtn) startBtn.disabled = true;
+    
+    if(!prePracticeShown){
+        prePracticeShown = true;
+        await new Promise(resolve => showPrePracticeModal(resolve));
+    }
+
     resetState();
     lockViewport();
     try {

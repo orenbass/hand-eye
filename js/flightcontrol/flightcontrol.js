@@ -8,10 +8,8 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   const timeEl=document.getElementById('flightcontrol-time');
   const scoreEl=document.getElementById('flightcontrol-score');
   const statsBox=document.getElementById('flightcontrol-stats');
-  const phaseBanner=document.getElementById('flightcontrol-phase-banner');
-  const realStartBtn=document.getElementById('flightcontrol-real-start-button');
-  const countdownEl=document.getElementById('flightcontrol-countdown');
   const statusEl=document.getElementById('flightcontrol-status');
+  const layoutEl=document.getElementById('flightcontrol-layout');
   if(!btn||!canvas) return; 
   const ctx=canvas.getContext('2d');
   
@@ -23,40 +21,87 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   let cfg=null;
   let stage='idle'; let practiceDone=false; let countdownTimer=null; let countdownRemaining=0; let mode='idle';
   let interactionLockToken=null;
+  let practiceModalEl=null; let prePracticeShown=false;
+  let practiceRunsComplete = 0;
 
-  function setBanner(text, tone){
-    if(!phaseBanner) return;
-    if(!text){
-      phaseBanner.style.display='none';
-      phaseBanner.textContent='';
-      phaseBanner.removeAttribute('data-mode');
-      return;
+  // Attach HUDs
+  if(window.timerHUD && window.timerHUD.attach) {
+      window.timerHUD.attach(document.getElementById('flightcontrol-timer-slot'));
+  }
+  if(window.practiceBanner && window.practiceBanner.attach) {
+      window.practiceBanner.attach(document.getElementById('flightcontrol-practice-slot'));
+  }
+
+  function ensurePracticeModal(){
+    if(practiceModalEl) return practiceModalEl;
+    const overlay=document.createElement('div');
+    overlay.id='flightcontrol-practice-modal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:15000;display:none;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML=`<div style="max-width:520px;width:100%;background:#ffffff;color:#0f172a;border-radius:20px;padding:32px;box-shadow:0 25px 55px rgba(15,23,42,0.45);text-align:center;"></div>`;
+    document.body.appendChild(overlay);
+    practiceModalEl=overlay;
+    return overlay;
+  }
+
+  function showPrePracticeModal(onStart){
+    const modal=ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+        </p>
+        <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
+    `;
+    modal.style.display='flex';
+    const startBtn=contentBox.querySelector('[data-action="start-practice"]');
+    if(startBtn){
+        startBtn.onclick=()=>{
+            modal.style.display='none';
+            if(typeof onStart==='function') onStart();
+        };
     }
-    phaseBanner.style.display='block';
-    phaseBanner.textContent=text;
-    if(tone) phaseBanner.setAttribute('data-mode', tone);
-    else phaseBanner.removeAttribute('data-mode');
   }
 
-  function toggleRealStartButton(show, disabled){
-    if(!realStartBtn) return;
-    realStartBtn.style.display = show ? 'inline-flex' : 'none';
-    realStartBtn.disabled = !!disabled;
-  }
-
-  function setCountdown(text){
-    if(!countdownEl) return;
-    if(text){
-      countdownEl.style.display='block';
-      countdownEl.textContent=text;
-    } else {
-      countdownEl.style.display='none';
-      countdownEl.textContent='';
-    }
-  }
-
-  function clearCountdown(){
-    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+  function showEndPracticeModal(onRealStart){
+    const modal = ensurePracticeModal();
+    const contentBox = modal.querySelector('div');
+    contentBox.innerHTML = `
+        <div style="font-size:2.6rem;margin-bottom:12px">✓</div>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          כעת נעבור למבחן האמיתי. התוצאות יישמרו.
+        </p>
+        <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">סיימתי תרגול – להתחיל מבחן אמיתי</button>
+    `;
+    modal.style.display = 'flex';
+    
+    const btn = contentBox.querySelector('[data-action="start-real"]');
+    btn.onclick = () => {
+        const countdownSec = cfg && cfg.examCountdownSec ? cfg.examCountdownSec : 0;
+        if(countdownSec > 0){
+            let remaining = countdownSec;
+            contentBox.innerHTML = `
+                <div style="font-size:4rem;margin-bottom:16px;font-weight:800;color:#0ea5e9;line-height:1" id="fc-modal-countdown">${remaining}</div>
+                <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
+                <p style="color:#64748b;margin:0">נא להתכונן</p>
+            `;
+            const timer = setInterval(()=>{
+                remaining--;
+                const el = document.getElementById('fc-modal-countdown');
+                if(el) el.textContent = remaining;
+                if(remaining <= 0){
+                    clearInterval(timer);
+                    modal.style.display = 'none';
+                    if(onRealStart) onRealStart();
+                }
+            }, 1000);
+        } else {
+            modal.style.display = 'none';
+            if(onRealStart) onRealStart();
+        }
+    };
   }
 
   function setStatus(text, tone='info'){
@@ -102,15 +147,43 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
     else { statsBox.style.display='none'; }
   }
 
-  function startPractice(){
+  function startPractice(isNextRun = false){
     if(stage==='real' || stage==='countdown' || stage==='done') return;
-    if(stage==='practice' && !practiceDone) return;
+    if(stage==='practice' && !practiceDone && !isNextRun) return;
+    
+    if(!isNextRun) {
+        practiceRunsComplete = 0;
+    }
+
     if (window.enterFullscreenMode) window.enterFullscreenMode();
     stage='practice'; practiceDone=false; mode='practice';
-    setBanner('תרגול - התוצאות אינן נשמרות', 'practice');
-    toggleRealStartButton(true,false);
-    setCountdown(null); clearCountdown();
-    setStatus('תרגול: שמור את הסמן במרכז בעזרת מקשי החצים', 'info');
+    
+    if(layoutEl) layoutEl.setAttribute('data-stage', 'practice');
+
+    // Re-attach HUDs
+    if(window.timerHUD && window.timerHUD.attach) {
+        window.timerHUD.attach(document.getElementById('flightcontrol-timer-slot'));
+    }
+    if(window.practiceBanner && window.practiceBanner.attach) {
+        window.practiceBanner.attach(document.getElementById('flightcontrol-practice-slot'));
+    }
+
+    cfg = getFlightControlConfig();
+    const totalRuns = (cfg && cfg.practiceRuns) || 1;
+    const currentRun = practiceRunsComplete + 1;
+
+    if(window.practiceBanner) {
+        window.practiceBanner.show({
+            label: 'מצב תרגול',
+             description: 'התוצאות אינן נשמרות',
+            mode: 'practice'
+        });
+    }
+    if(window.timerHUD) {
+        window.timerHUD.show('זמן תרגול', '00:00', 'practice');
+    }
+
+    setStatus(`תרגול ${currentRun}/${totalRuns}: שמור את הסמן במרכז בעזרת מקשי החצים`, 'info');
     updateStatsVisibility();
     startRun('practice');
   }
@@ -118,50 +191,56 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   function finishPractice(options={}){
     const { skipMessage=false, keepFullscreen=true } = options;
     releaseInteractionLock();
-    stage='practice'; practiceDone=true; mode='idle';
-    if(!skipMessage){
-      setStatus('התרגול הסתיים. לחצו על "סיימתי תרגול – להתחיל מבחן אמיתי" כדי להמשיך.', 'info');
-      setBanner('התרגול הסתיים - ניתן להתחיל את המבחן האמיתי', 'practice');
+    
+    practiceRunsComplete++;
+    const totalRuns = (cfg && cfg.practiceRuns) || 1;
+    
+    if(practiceRunsComplete < totalRuns) {
+        setStatus(`סבב תרגול ${practiceRunsComplete} הסתיים. מתחיל סבב ${practiceRunsComplete+1}...`, 'info');
+        setTimeout(() => {
+             startPractice(true);
+        }, 1500);
+        return;
     }
-    toggleRealStartButton(true,false);
-    setCountdown(null); clearCountdown();
+
+    stage='practice'; practiceDone=true; mode='idle';
+    
+    if(!skipMessage){
+        showEndPracticeModal(() => startRealCountdown());
+    }
+    
     updateStatsVisibility();
     if(!keepFullscreen && window.exitFullscreenMode) window.exitFullscreenMode();
   }
 
   function startRealCountdown(){
-    if(stage==='real' || stage==='countdown' || stage==='done') return;
-    if(!practiceDone){
-      running=false;
-      finishPractice({ skipMessage:true, keepFullscreen:true });
-    }
-    stage='countdown'; mode='idle';
-    setBanner('ספירה לאחור למבחן האמיתי', 'countdown');
-    toggleRealStartButton(true,true);
-    countdownRemaining=10;
-    const label=countdownRemaining===1?'שנייה':'שניות';
-    setCountdown(`המבחן האמיתי יתחיל בעוד ${countdownRemaining} ${label}`);
-    setStatus('המבחן האמיתי יתחיל בעוד 10 שניות. התכוננו!', 'pending');
-    if (window.enterFullscreenMode) window.enterFullscreenMode();
-    clearCountdown();
-    applyInteractionLock('countdown');
-    countdownTimer=setInterval(()=>{
-      countdownRemaining--;
-      if(countdownRemaining>0){
-        const lbl=countdownRemaining===1?'שנייה':'שניות';
-        setCountdown(`המבחן האמיתי יתחיל בעוד ${countdownRemaining} ${lbl}`);
-      } else {
-        clearCountdown(); setCountdown(null);
-        startRealTest();
-      }
-    },1000);
+    // Deprecated - handled by modal now
+    startRealTest();
   }
 
   function startRealTest(){
-    clearCountdown(); setCountdown(null);
-    toggleRealStartButton(false);
+    if(countdownTimer) clearInterval(countdownTimer);
     stage='real'; mode='real';
-    setBanner('מבחן אמיתי - התוצאות נשמרות', 'real');
+    
+    if(layoutEl) layoutEl.setAttribute('data-stage', 'practice');
+
+    // Re-attach HUDs
+    if(window.timerHUD && window.timerHUD.attach) {
+        window.timerHUD.attach(document.getElementById('flightcontrol-timer-slot'));
+    }
+    if(window.practiceBanner && window.practiceBanner.attach) {
+        window.practiceBanner.attach(document.getElementById('flightcontrol-practice-slot'));
+    }
+
+    if(window.practiceBanner) {
+        window.practiceBanner.show({
+            label: 'מבחן אמת',
+            description: 'בהצלחה!',
+            mode: 'real'
+        });
+    }
+    if(window.timerHUD) window.timerHUD.hide();
+    
     setStatus('מבחן אמיתי: שמור את הסמן קרוב ככל האפשר למרכז.', 'info');
     updateStatsVisibility();
     startRun('real');
@@ -175,7 +254,9 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
     requestAnimationFrame(()=>resize());
     const admin = window.testAuth && window.testAuth.isAdmin && window.testAuth.isAdmin();
     if(statsBox){ statsBox.style.display = (targetMode==='real' && admin) ? 'block' : 'none'; }
-    timeLeft=cfg.seconds;
+    
+    timeLeft = (targetMode === 'practice' && cfg.practiceSeconds) ? cfg.practiceSeconds : cfg.seconds;
+    
     lastTs=0;
     accum=0; samples=0;
     cursor.x = canvas.width/2;
@@ -188,7 +269,7 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   }
 
   function resize(){
-    const size = Math.floor(window.innerHeight * 0.8);
+    const size = Math.floor(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.8));
     canvas.width = size;
     canvas.height = size;
     canvas.style.width = size + 'px';
@@ -208,7 +289,13 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
     const dt=Math.min(0.05,(ts-lastTs)/1000);
     lastTs=ts;
     timeLeft=Math.max(0,timeLeft-dt);
-    timeEl.textContent=fmtTime(timeLeft);
+    
+    // Update Timer HUD
+    if(window.timerHUD) {
+        const m = Math.floor(timeLeft / 60);
+        const s = Math.floor(timeLeft % 60);
+        window.timerHUD.update(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+    }
 
     const n=noiseValue(performance.now()/1000, cfg.difficulty);
 
@@ -252,15 +339,16 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
         finishPractice();
         return;
       }
-      if(!(window.testAuth && !window.testAuth.isAdmin())){ scoreEl.textContent=sc.toFixed(2)+' (סיום)'; }
+      if(!(window.testAuth && window.testAuth.isAdmin())){ scoreEl.textContent=sc.toFixed(2)+' (סיום)'; }
       if (window.exitFullscreenMode) window.exitFullscreenMode();
       if(window.testsCore){ window.testsCore.completeTest('flightcontrol', raw, sc, {avgDist:avg, samples}); }
       if (window.testAuth) {
         window.testAuth.showTestCompleteModal('flightcontrol', sc.toFixed(2));
       }
       stage='done'; mode='idle';
-      setBanner('המבחן האמיתי הסתיים', 'done');
-      setCountdown(null); toggleRealStartButton(false);
+      
+      if(window.practiceBanner) window.practiceBanner.hide();
+      
       setStatus('המבחן הסתיים.', 'success');
       return;
     }
@@ -283,7 +371,13 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
     }
   });
 
-  btn.addEventListener('click', startPractice);
-  if(realStartBtn) realStartBtn.addEventListener('click', startRealCountdown);
+  btn.addEventListener('click', () => {
+    if(!prePracticeShown){
+        prePracticeShown=true;
+        showPrePracticeModal(startPractice);
+    } else {
+        startPractice();
+    }
+  });
   document.addEventListener('DOMContentLoaded',()=>{ if(window.testsCore) window.testsCore.registerTest('flightcontrol',{title:'בקרת טיסה'}); });
 })();

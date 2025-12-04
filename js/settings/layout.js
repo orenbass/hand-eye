@@ -138,18 +138,6 @@ export function renderAdminLayout(container){
                   <label for="userNotes">הערות פנימיות</label>
                   <textarea id="userNotes" rows="3" style="width:100%;padding:12px;border:2px solid var(--border-color);border-radius:10px;resize:vertical;" placeholder="פרטים נוספים, סטטוס מבחנים וכו'."></textarea>
                 </div>
-                <div class="form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
-                  <div class="form-group" style="margin:0;">
-                    <label for="userAccessStart">פתיחת חלון ביצוע</label>
-                    <input id="userAccessStart" type="datetime-local" style="width:100%;padding:12px;border:2px solid var(--border-color);border-radius:10px;">
-                    <span class="form-hint" style="font-size:0.75rem;color:var(--text-secondary);">תחילת פרק הזמן שבו ניתן לבצע את המבחנים</span>
-                  </div>
-                  <div class="form-group" style="margin:0;">
-                    <label for="userAccessEnd">סגירת חלון ביצוע</label>
-                    <input id="userAccessEnd" type="datetime-local" style="width:100%;padding:12px;border:2px solid var(--border-color);border-radius:10px;">
-                    <span class="form-hint" style="font-size:0.75rem;color:var(--text-secondary);">אופציונלי – מועד אחרון לביצוע</span>
-                  </div>
-                </div>
                 <div class="form-group" style="margin-bottom:10px;">
                   <label for="userEntryPin">קוד כניסה (4 ספרות)</label>
                   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -168,16 +156,6 @@ export function renderAdminLayout(container){
                   <button id="userSaveBtn" type="button" class="btn" style="background:#10b981;color:#fff;padding:10px 18px;border-radius:10px;">💾 שמור מועמד</button>
                   <button id="userResetBtn" type="button" class="btn btn-secondary" style="padding:10px 18px;border-radius:10px;">איפוס טופס</button>
                   <button id="userDeleteBtn" type="button" class="btn" style="background:#ef4444;color:#fff;padding:10px 18px;border-radius:10px;display:none;">🗑️ מחק מועמד</button>
-                </div>
-                <div class="bulk-import-card" style="margin-top:24px;padding:16px;border:2px dashed var(--border-color);border-radius:14px;background:var(--bg-tertiary);">
-                  <h4 style="margin-top:0;margin-bottom:10px;font-size:0.95rem;display:flex;align-items:center;gap:6px;">ייבוא מרוכז של מועמדים</h4>
-                  <p style="margin:0 0 12px;font-size:0.8rem;color:var(--text-secondary);">הורד קובץ תבנית, מלא בו את פרטי המועמדים (כולל חלון ביצוע) ולאחר מכן העלה אותו לכאן לצורך בדיקת תקינות ויצירה אוטומטית.</p>
-                  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-                    <button id="userExcelTemplateBtn" type="button" class="btn btn-secondary" style="padding:8px 16px;border-radius:10px;">⬇ הורד תבנית Excel</button>
-                    <button id="userExcelUploadBtn" type="button" class="btn" style="padding:8px 16px;border-radius:10px;background:#0ea5e9;color:#fff;">⬆ העלה קובץ Excel</button>
-                    <input id="userExcelInput" type="file" accept=".xlsx,.xls,.csv" style="display:none;">
-                    <span id="userExcelStatus" style="font-size:0.8rem;color:var(--text-secondary);"></span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -261,6 +239,21 @@ export function renderAdminLayout(container){
                 </select>
                 <span class="form-hint">משפיע על מהירות תנועת היעד</span>
               </div>
+              <div class="form-group">
+                <label for="trackingExamCountdownSec">זמן המתנה למבחן (שניות)</label>
+                <input id="trackingExamCountdownSec" type="number" min="3" max="60" value="10">
+                <span class="form-hint">ספירה לאחור לפני תחילת המבחן</span>
+              </div>
+              <div class="form-group">
+                <label for="trackingPracticeSeconds">זמן תרגול (שניות)</label>
+                <input id="trackingPracticeSeconds" type="number" min="5" max="300" value="30">
+                <span class="form-hint">משך שלב התרגול</span>
+              </div>
+              <div class="form-group">
+                <label for="trackingPracticeRuns">מספר ריצות תרגול</label>
+                <input id="trackingPracticeRuns" type="number" min="0" max="10" value="1">
+                <span class="form-hint">כמה פעמים ניתן לתרגל</span>
+              </div>
             </div>
           </div>
           <div class="settings-section section-northfind" data-tab-section="northfind" style="display:none">
@@ -279,6 +272,21 @@ export function renderAdminLayout(container){
                   <option>קשה</option>
                 </select>
                 <span class="form-hint">משפיע על מהירות הסיבוב</span>
+              </div>
+              <div class="form-group">
+                <label for="northfindExamCountdownSec">זמן המתנה למבחן (שניות)</label>
+                <input id="northfindExamCountdownSec" type="number" min="3" max="60" value="10">
+                <span class="form-hint">ספירה לאחור לפני תחילת המבחן</span>
+              </div>
+              <div class="form-group">
+                <label for="northfindPracticeSeconds">זמן תרגול (שניות)</label>
+                <input id="northfindPracticeSeconds" type="number" min="5" max="300" value="30">
+                <span class="form-hint">משך שלב התרגול</span>
+              </div>
+              <div class="form-group">
+                <label for="northfindPracticeRuns">מספר ריצות תרגול</label>
+                <input id="northfindPracticeRuns" type="number" min="0" max="10" value="1">
+                <span class="form-hint">כמה פעמים ניתן לתרגל</span>
               </div>
             </div>
             <h4 style="margin-top:30px;margin-bottom:16px">הגדרות מפורטות</h4>
@@ -390,6 +398,21 @@ export function renderAdminLayout(container){
                 </select>
                 <span class="form-hint">משפיע על עוצמת ההפרעות</span>
               </div>
+              <div class="form-group">
+                <label for="flightcontrolExamCountdownSec">זמן המתנה למבחן (שניות)</label>
+                <input id="flightcontrolExamCountdownSec" type="number" min="3" max="60" value="10">
+                <span class="form-hint">ספירה לאחור לפני תחילת המבחן</span>
+              </div>
+              <div class="form-group">
+                <label for="flightcontrolPracticeSeconds">זמן תרגול (שניות)</label>
+                <input id="flightcontrolPracticeSeconds" type="number" min="5" max="300" value="30">
+                <span class="form-hint">משך שלב התרגול</span>
+              </div>
+              <div class="form-group">
+                <label for="flightcontrolPracticeRuns">מספר ריצות תרגול</label>
+                <input id="flightcontrolPracticeRuns" type="number" min="0" max="10" value="1">
+                <span class="form-hint">כמה פעמים ניתן לתרגל</span>
+              </div>
             </div>
           </div>
           <div class="settings-section section-targetid" data-tab-section="targetid" style="display:none">
@@ -409,25 +432,26 @@ export function renderAdminLayout(container){
                 </select>
                 <span class="form-hint">משפיע על מהירות ומספר המטרות</span>
               </div>
+              <div class="form-group">
+                <label for="targetidPracticeSeconds">זמן תרגול (שניות)</label>
+                <input id="targetidPracticeSeconds" type="number" min="5" max="300" value="30">
+                <span class="form-hint">משך שלב התרגול</span>
+              </div>
+              <div class="form-group">
+                <label for="targetidExamCountdownSec">זמן המתנה למבחן (שניות)</label>
+                <input id="targetidExamCountdownSec" type="number" min="3" max="60" value="10">
+                <span class="form-hint">ספירה לאחור לפני תחילת המבחן</span>
+              </div>
+              <div class="form-group">
+                <label for="targetidPracticeRuns">מספר ריצות תרגול</label>
+                <input id="targetidPracticeRuns" type="number" min="0" max="10" value="1">
+                <span class="form-hint">כמה פעמים ניתן לתרגל</span>
+              </div>
             </div>
           </div>
           <div class="settings-section section-flightexam" data-tab-section="flightexam" style="display:none">
             <h3>מבחן הטסה</h3>
             <div class="form-grid">
-              <div class="form-group">
-                <label for="flightexamSeconds">משך כל חלק (שניות)</label>
-                <input id="flightexamSeconds" type="number" min="5" max="600" value="20">
-                <span class="form-hint">זמן ברירת מחדל לחלק</span>
-              </div>
-              <div class="form-group">
-                <label for="flightexamDifficulty">רמת קושי</label>
-                <select id="flightexamDifficulty">
-                  <option>קל</option>
-                  <option selected>בינוני</option>
-                  <option>קשה</option>
-                </select>
-                <span class="form-hint">משפיע על רגישות הדיוק</span>
-              </div>
             </div>
             <h4 style="margin-top:30px;margin-bottom:16px">זמני שלבי המבחן</h4>
             <div class="form-grid">
