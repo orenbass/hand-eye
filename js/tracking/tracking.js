@@ -67,9 +67,10 @@ import { computeTrackingScores } from './tracking.scoring.js';
             const contentBox = modal.querySelector('div');
             contentBox.innerHTML = `
                 <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
-                <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+                <h2 style="margin:0 0 12px;font-size:1.45rem;">תרגול ניסיון לפני המבחן האמיתי</h2>
                 <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-                  המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+                  לפניך שלב תרגול לניסיון בלבד. מטרתו לאפשר היכרות והתנסות קצרה עם התרגיל.
+לאחר סיום התרגול יתחיל המבחן האמיתי, ובסופו יחושב הציון.
                 </p>
                 <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
             `;
@@ -87,12 +88,13 @@ import { computeTrackingScores } from './tracking.scoring.js';
             const contentBox = modal.querySelector('div');
             contentBox.innerHTML = `
                 <div style="font-size:2.6rem;margin-bottom:12px">✓</div>
-                <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
-                <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-                  כעת נעבור למבחן האמיתי. התוצאות יישמרו.
-                </p>
-                <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">סיימתי תרגול – להתחיל מבחן אמיתי</button>
-            `;
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
+        <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
+          בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
+ודא שאתה מוכן לפני המעבר למבחן.
+        </p>
+        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+    `;
             modal.style.display = 'flex';
             
             const btn = contentBox.querySelector('[data-action="start-real"]');

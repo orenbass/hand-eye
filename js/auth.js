@@ -388,11 +388,30 @@
         modal.style.display='flex';
     }
     
+    function showIntroScreen() {
+        const intro = document.getElementById('general-intro-screen');
+        if(intro) intro.style.display = 'flex';
+    }
+
+    function hideIntroScreen() {
+        const intro = document.getElementById('general-intro-screen');
+        if(intro) intro.style.display = 'none';
+    }
+
     function setupLoginForm() {
         const loginButton = document.getElementById('login-button');
         const idInput = document.getElementById('id-input');
         const pinInput = document.getElementById('pin-input');
         const errorMsg = document.getElementById('login-error');
+        
+        // Setup Intro Button
+        const introStartBtn = document.getElementById('intro-start-btn');
+        if(introStartBtn) {
+            introStartBtn.addEventListener('click', () => {
+                hideIntroScreen();
+                selectFirstAvailable();
+            });
+        }
         
         if (!loginButton || !idInput || !pinInput) return;
         const defaultLabel = loginButton.textContent;
@@ -410,7 +429,9 @@
                 updateTestButtons();
                 hideUserStatsIfNeeded();
                 applyBodyMode();
-                if(!isAdmin) selectFirstAvailable();
+                if(!isAdmin) {
+                    showIntroScreen();
+                }
             } catch(err){
                 errorMsg.style.display = 'block';
                 errorMsg.textContent = (err && err.message) ? err.message : 'שגיאה בהתחברות';

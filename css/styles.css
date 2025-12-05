@@ -2444,7 +2444,7 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     flex: 0 0 auto;
 }
 
-.orientation-layout:not([data-stage="practice"]):not([data-stage="real"]):not([data-stage="countdown"]):not([data-stage="done"]) .orientation-header-slot-practice {
+.orientation-layout:not([data-stage="practice"]):not([data-stage="real"]):not([data-stage="countdown"]):not([data-stage="done"]):not([data-stage="exam"]) .orientation-header-slot-practice {
     display: none;
 }
 
@@ -2585,18 +2585,29 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
 }
 
 /* ===== EYE-HAND SHELL ===== */
+#test-screen .test-view {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
 .eyehand-view {
     height: 100%;
 }
 
 .eyehand-layout {
     min-height: calc(100vh - 120px);
-    background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), #020617 70%);
-    color: #fff;
+    padding-bottom: 24px;
+    background: transparent;
+    color: var(--text-primary);
+    border: none;
+    box-shadow: none;
 }
+
 
 .eyehand-header {
     flex-wrap: wrap;
+    padding-bottom: 0;
+    margin-bottom: 12px;
 }
 
 .eyehand-header-center {
@@ -2615,9 +2626,9 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     gap: 2px;
     padding: 10px 24px;
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.9);
-    border: 1px solid rgba(148, 163, 184, 0.45);
-    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.4);
+    background: rgba(248, 250, 252, 0.95);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.15);
 }
 
 .eyehand-phase-banner .phase-title {
@@ -2630,40 +2641,63 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     color: rgba(226, 232, 240, 0.9);
 }
 
+.eyehand-header .orientation-header-huds {
+    width: auto;
+    margin: 0 auto;
+    gap: 18px;
+    align-items: center;
+    justify-content: center;
+}
+
+.eyehand-header .orientation-header-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .eyehand-main-row {
-    padding-top: 18px;
+    padding: 0;
+    margin-top: 20px;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.eyehand-footer-row {
+    margin-top: 32px;
+    width: 100%;
 }
 
 .eyehand-test-area {
     width: 100%;
     display: flex;
     justify-content: center;
-    padding: 10px 0 32px;
+    padding: 0;
 }
 
 .eyehand-canvas-wrapper {
     position: relative;
-    width: min(92vw, 1320px);
-    padding: 28px 36px;
-    margin: 20px auto 0;
-    border-radius: 28px;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    background: rgba(2, 6, 23, 0.88);
-    box-shadow: 0 25px 80px rgba(2, 6, 23, 0.65);
+    width: min(96vw, 1400px);
+    padding: 0;
+    margin: 0 auto;
+    border-radius: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    max-height: calc(100vh - 260px);
+    max-height: calc(100vh - 240px);
 }
 
 .eyehand-canvas-wrapper canvas {
     width: 100% !important;
     height: auto !important;
     aspect-ratio: 16 / 9;
-    max-height: calc(65vh - 60px);
-    border-radius: 22px;
-    background: #020817;
-    border: 2px solid rgba(15, 23, 42, 0.75);
+    max-height: calc(100vh - 320px);
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    box-shadow: var(--shadow-md);
 }
 
 .eyehand-countdown-pill {
@@ -2683,6 +2717,7 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
 }
 
 .eyehand-footer-content {
+    padding-top: 12px;
     align-items: center;
 }
 

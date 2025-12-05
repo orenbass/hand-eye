@@ -17,6 +17,7 @@ export function drawFullPath({ctx, maskCtx, path, pathWidth, wallWidth}) {
     for(let i=1;i<path.length;i++){
       const seg=path[i];
       if(seg.type==='bezier') c.bezierCurveTo(seg.cp1.x, seg.cp1.y, seg.cp2.x, seg.cp2.y, seg.end.x, seg.end.y);
+      else c.lineTo(seg.x, seg.y);
     }
     c.stroke();
   }
@@ -49,6 +50,9 @@ export function flattenPathSamples(path){
         const t=s/SAMPLES_PER_SEGMENT; const x=bezier(prev.x, seg.cp1.x, seg.cp2.x, seg.end.x, t); const y=bezier(prev.y, seg.cp1.y, seg.cp2.y, seg.end.y, t); points.push({x,y});
       }
       prev={x:seg.end.x,y:seg.end.y};
+    } else {
+      points.push({x: seg.x, y: seg.y});
+      prev = {x: seg.x, y: seg.y};
     }
   }
   let total=0; for(let i=1;i<points.length;i++){ const a=points[i-1], b=points[i]; const dx=b.x-a.x, dy=b.y-a.y; total+=Math.sqrt(dx*dx+dy*dy); }

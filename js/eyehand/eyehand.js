@@ -335,10 +335,17 @@ class EyeHandTest {
     if (this.mode === 'practice' && this.practiceEnabled) {
       window.practiceBanner.show({
        label: 'מצב תרגול',
-       description: 'התוצאות אינן נשמרות'
+       description: 'התוצאות אינן נשמרות',
+       mode: 'practice'
       });
     } else {
-      window.practiceBanner.hide();
+      window.practiceBanner.show({
+        label: 'מבחן אמיתי',
+        description: this.testActive
+          ? 'הציון נשמר – הישאר בתוך הרצועה הלבנה.'
+          : 'המבחן האמיתי עומד להתחיל – מיקום יד יציב.',
+        mode: 'real'
+      });
     }
   }
 
@@ -410,7 +417,8 @@ class EyeHandTest {
         <div style="font-size:2.6rem;margin-bottom:12px">🎯</div>
         <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
         <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התוצאה הקרובה תישמר לציון הרשמי, לכן ודא שאתה מוכן לפני שממשיכים.
+          בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
+ודא שאתה מוכן לפני המעבר למבחן.
         </p>
         <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
     `;
@@ -454,9 +462,10 @@ class EyeHandTest {
     
     contentBox.innerHTML = `
         <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
-        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">תרגול ניסיון לפני המבחן האמיתי</h2>
         <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו במשך זמן קצר.
+         לפניך שלב תרגול לניסיון בלבד. מטרתו לאפשר היכרות והתנסות קצרה עם התרגיל.
+לאחר סיום התרגול יתחיל המבחן האמיתי, ובסופו יחושב הציון.
         </p>
         <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
     `;
@@ -498,27 +507,137 @@ class EyeHandTest {
   }
 
   generatePath() {
-    this.path = [];
+    if (!this.canvas) return;
     const width = this.canvas.width;
     const height = this.canvas.height;
-    const margin = 60;
-    const segments = 8;
-    const segmentLength = (width - 2 * margin) / segments;
-    let x = margin;
-    let y = height / 2;
-    this.path.push({ x, y });
-    const random = this.seededRandom(this.pathSeed);
-    for (let i = 0; i < segments; i++) {
-      const amplitude = 150 + random() * 100;
-      const direction = i % 2 === 0 ? 1 : -1;
-      const cp1 = { x: x + segmentLength * 0.35, y: y + direction * amplitude * (0.6 + random() * 0.4) };
-      const cp2 = { x: x + segmentLength * 0.65, y: y + direction * amplitude * (0.4 + random() * 0.5) };
-      x += segmentLength;
-      y = height / 2 + (random() - 0.5) * 250;
-      y = Math.max(margin, Math.min(height - margin, y));
-      this.path.push({ type: 'bezier', cp1, cp2, end: { x, y } });
+    
+    if (this.mode === 'practice') {
+      this.path = this.buildPracticePath(width, height);
+    } else {
+      // Check for custom path from settings
+      const customPath = window.getEyehandCustomPath ? window.getEyehandCustomPath() : null;
+      if (customPath && customPath.length > 5) {
+        this.path = this.buildCustomPath(customPath, width, height);
+      } else {
+        this.path = this.buildExamPath(width, height);
+      }
     }
     this.flattenPath(); // keep path structure
+  }
+
+  buildCustomPath(customPoints, canvasWidth, canvasHeight) {
+    // Custom points are stored relative to 800x450 canvas, scale to current canvas
+    const scaleX = canvasWidth / 800;
+    const scaleY = canvasHeight / 450;
+    
+    const scaledPoints = customPoints.map(p => ({
+      x: p.x * scaleX,
+      y: p.y * scaleY
+    }));
+    
+    // Return as simple line segments (no bezier needed for hand-drawn paths)
+    return scaledPoints;
+  }
+
+  buildPracticePath(width, height) {
+    const margin = 80;
+    const startX = margin;
+    const endX = width - margin;
+    const y = height / 2;
+    const segment = (endX - startX) / 4;
+    return [
+      { x: startX, y: y - 50 },
+      { x: startX + segment, y: y + 50 },
+      { x: startX + segment * 2, y: y - 50 },
+      { x: startX + segment * 3, y: y + 50 },
+      { x: endX, y: y - 50 }
+    ];
+  }
+
+  buildExamPath(width, height) {
+    const marginX = 60;
+    const points = [
+      // Shape 1: Elephant Trunk
+      { x: marginX, y: height * 0.3 },
+      { x: width * 0.15, y: height * 0.8 },
+      { x: width * 0.25, y: height * 0.25 },
+
+      // Shape 2: Keyhole
+      { x: width * 0.35, y: height * 0.8 },
+      { x: width * 0.45, y: height * 0.2 },
+
+      // Shape 3: Chair/Star
+      { x: width * 0.55, y: height * 0.85 },
+      { x: width * 0.6, y: height * 0.15 },
+      { x: width * 0.7, y: height * 0.8 },
+
+      // Shape 4: Zig-Zag
+      { x: width * 0.78, y: height * 0.2 },
+      { x: width * 0.85, y: height * 0.85 },
+      { x: width - marginX, y: height * 0.3 }
+    ];
+
+    const guides = [
+      // Shape 1
+      { t1: 0.4, t2: 0.8, vert1: 150, vert2: -180, horiz1: 20, horiz2: -30 },
+      { t1: 0.2, t2: 0.6, vert1: -200, vert2: 150, horiz1: 30, horiz2: -20 },
+      // Shape 2
+      { t1: 0.5, t2: 0.5, vert1: 100, vert2: -220, horiz1: 0, horiz2: 0 },
+      { t1: 0.4, t2: 0.8, vert1: -180, vert2: 180, horiz1: 10, horiz2: -10 },
+      // Shape 3
+      { t1: 0.5, t2: 0.5, vert1: 120, vert2: -200, horiz1: 0, horiz2: 0 },
+      { t1: 0.3, t2: 0.7, vert1: -150, vert2: 150, horiz1: 20, horiz2: -20 },
+      { t1: 0.5, t2: 0.5, vert1: 180, vert2: -120, horiz1: 0, horiz2: 0 },
+      // Shape 4
+      { t1: 0.4, t2: 0.6, vert1: -200, vert2: 200, horiz1: 0, horiz2: 0 },
+      { t1: 0.5, t2: 0.5, vert1: 220, vert2: -220, horiz1: 0, horiz2: 0 },
+      { t1: 0.3, t2: 0.7, vert1: -180, vert2: 100, horiz1: -15, horiz2: 10 }
+    ];
+
+    return this.buildCurvyPath(points, guides);
+  }
+
+  createControlPoint(base, dx, dy, t, verticalOffset = 0, horizontalOffset = 0) {
+    const rawX = base.x + dx * t + horizontalOffset;
+    const rawY = base.y + dy * t + verticalOffset;
+    const width = this.canvas ? this.canvas.width : 0;
+    const height = this.canvas ? this.canvas.height : 0;
+    const margin = 50;
+    const clampAxis = (value, dimension) => {
+      if (!dimension) return value;
+      const limit = Math.max(dimension - margin, margin);
+      return Math.min(Math.max(margin, value), limit);
+    };
+    return {
+      x: clampAxis(rawX, width),
+      y: clampAxis(rawY, height)
+    };
+  }
+
+  buildCurvyPath(points = [], guides = []) {
+    if (!points.length) return [];
+    const path = [{ x: points[0].x, y: points[0].y }];
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const target = points[i];
+      if (guides.length > 0 && guides[i-1]) {
+        const dx = target.x - prev.x;
+        const dy = target.y - prev.y;
+        const guide = guides[i - 1] || {};
+        const t1 = typeof guide.t1 === 'number' ? guide.t1 : 0.35;
+        const t2 = typeof guide.t2 === 'number' ? guide.t2 : 0.65;
+        const vert1 = typeof guide.vert1 === 'number' ? guide.vert1 : 0;
+        const vert2 = typeof guide.vert2 === 'number' ? guide.vert2 : -(vert1 || 0) * 0.8;
+        const horiz1 = typeof guide.horiz1 === 'number' ? guide.horiz1 : 0;
+        const horiz2 = typeof guide.horiz2 === 'number' ? guide.horiz2 : -(horiz1 || 0) * 0.5;
+        const cp1 = this.createControlPoint(prev, dx, dy, t1, vert1, horiz1);
+        const cp2 = this.createControlPoint(prev, dx, dy, t2, vert2, horiz2);
+        path.push({ type: 'bezier', cp1, cp2, end: { x: target.x, y: target.y } });
+      } else {
+        path.push({ x: target.x, y: target.y });
+      }
+    }
+    return path;
   }
 
   seededRandom(seed) {

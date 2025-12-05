@@ -5,6 +5,9 @@
     const LS_FLIGHTEXAM='app.flightexam.parts'; // שם חדש למבחן הטסה
     const LS_NEWEXAM_OLD='app.newexam.parts'; // תאימות לאחור
     const LS_ORIENTATION='app.orientation'; // הוספת localStorage למבחן התמצאות
+    const LS_EYEHAND_PATH='app.eyehand.customPath';
+    const EYEHAND_PATH_TABLE='eyehand_paths';
+    const EYEHAND_PATH_ROW_ID='global_default';
     const DEFAULT_SETTINGS_JSON_PATH='assets/config/exam-settings-export.json';
     const DEFAULT_SETTINGS={
       candidateId:'',
@@ -32,6 +35,31 @@
       questionSets:[],
       exampleSets:[]
     };
+    const TEST_SETTINGS_TABLES={
+      eyehand:'eyehand_settings',
+      reaction:'reaction_settings',
+      memory:'memory_settings',
+      tracking:'tracking_settings',
+      northfind:'northfind_settings',
+      flightcontrol:'flightcontrol_settings',
+      targetid:'targetid_settings',
+      orientation:'orientation_settings',
+      flightexam:'flightexam_settings'
+    };
+    const TEST_SECTION_LABELS={
+      eyehand:'תיאום עין-יד',
+      reaction:'זמן תגובה',
+      memory:'זיכרון צבעים',
+      tracking:'מעקב וקשב',
+      northfind:'מציאת הצפון',
+      flightcontrol:'בקרת טיסה',
+      targetid:'ירי במטרות',
+      orientation:'התמצאות',
+      flightexam:'מבחן הטסה'
+    };
+    const TEST_SECTION_ROW_ID='default';
+    const LS_TEST_SECTION_PREFIX='app.settings.section.';
+    const testSectionBindings={};
 
     function sanitizeOrientationConfig(raw){
       const base={
@@ -175,6 +203,143 @@
     function load(k,def){ try{ const s=localStorage.getItem(k); return s? JSON.parse(s): JSON.parse(JSON.stringify(def)); }catch(e){ return JSON.parse(JSON.stringify(def)); } }
     function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(err){ if(err && err.name==='QuotaExceededError'){ console.warn('[storage] quota exceeded for key', k); alert('⚠ שטח האחסון מלא – נסיון דחיסה יתבצע.'); } else { console.error('[storage] error saving', k, err); } } }
     function deepClone(value){ try{ return JSON.parse(JSON.stringify(value)); }catch(e){ return value; } }
+
+    const EYEHAND_CANVAS_WIDTH=800;
+    const EYEHAND_CANVAS_HEIGHT=450;
+    let eyehandPathCache=null;
+    let eyehandPathFetchPromise=null;
+
+    function sanitizeEyehandPoints(list){
+      if(!Array.isArray(list)) return [];
+      return list
+        .map(pt=>({
+          x: Math.max(0, Math.min(EYEHAND_CANVAS_WIDTH, Math.round(Number(pt && pt.x)||0))),
+          y: Math.max(0, Math.min(EYEHAND_CANVAS_HEIGHT, Math.round(Number(pt && pt.y)||0)))
+        }))
+        .filter(pt=>Number.isFinite(pt.x) && Number.isFinite(pt.y));
+    }
+
+    function readEyehandPathFromStorage(){
+      try{
+        const raw=localStorage.getItem(LS_EYEHAND_PATH);
+        if(!raw) return null;
+        const parsed=JSON.parse(raw);
+        if(Array.isArray(parsed)) return sanitizeEyehandPoints(parsed);
+        if(parsed && Array.isArray(parsed.points)) return sanitizeEyehandPoints(parsed.points);
+      }catch(err){
+        console.warn('[eyehand-path] failed to parse local cache', err);
+      }
+      return null;
+    }
+
+    function writeEyehandPathToStorage(points, meta){
+      if(!Array.isArray(points) || points.length<2){
+        localStorage.removeItem(LS_EYEHAND_PATH);
+        eyehandPathCache=null;
+        return;
+      }
+      const sanitized=sanitizeEyehandPoints(points);
+      const payload={ points:sanitized, updatedAt:(meta && meta.updatedAt) || new Date().toISOString() };
+      try{ localStorage.setItem(LS_EYEHAND_PATH, JSON.stringify(payload)); }
+      catch(err){ console.warn('[eyehand-path] failed to persist local cache', err); }
+      eyehandPathCache=sanitized;
+    }
+
+    function getEyehandPathCache(){
+      if(eyehandPathCache && eyehandPathCache.length) return eyehandPathCache.map(p=>({x:p.x,y:p.y}));
+      const stored=readEyehandPathFromStorage();
+      if(stored && stored.length){ eyehandPathCache=stored; return stored.map(p=>({x:p.x,y:p.y})); }
+      return null;
+    }
+
+    function handleSupabaseNotFound(error){
+      if(!error) return false;
+      const code = error.code || error.status || error.message;
+      return code==='PGRST116' || code===406 || code==='42P01' || (typeof code==='string' && code.toLowerCase().includes('row'));
+    }
+
+    async function fetchEyehandPathFromSupabase(options){
+      if(!window.supabaseClient) return null;
+      const opts=options||{};
+      try{
+        let builder=window.supabaseClient
+          .from(EYEHAND_PATH_TABLE)
+          .select('id, points, updated_at')
+          .eq('id', EYEHAND_PATH_ROW_ID)
+          .limit(1);
+        const exec=builder.maybeSingle? builder.maybeSingle(): builder.single();
+        const { data, error } = await exec;
+        if(error){
+          if(handleSupabaseNotFound(error)) return null;
+          throw error;
+        }
+        if(data && Array.isArray(data.points)){
+          const sanitized=sanitizeEyehandPoints(data.points);
+          writeEyehandPathToStorage(sanitized, { updatedAt: data.updated_at });
+          return sanitized;
+        }
+        return null;
+      }catch(err){
+        if(opts.throwOnError) throw err;
+        if(!opts.silent){ console.warn('[eyehand-path] remote load failed', err); }
+        return null;
+      }
+    }
+
+    function requestEyehandPathHydration(){
+      if(eyehandPathFetchPromise || !window.supabaseClient) return eyehandPathFetchPromise;
+      eyehandPathFetchPromise = fetchEyehandPathFromSupabase({ silent:true })
+        .catch(err=>{ console.warn('[eyehand-path] hydration error', err); return null; })
+        .finally(()=>{ eyehandPathFetchPromise=null; });
+      return eyehandPathFetchPromise;
+    }
+
+    async function saveEyehandPathToSupabase(points){
+      if(!window.supabaseClient) throw new Error('Supabase לא מאותחל');
+      const sanitized=sanitizeEyehandPoints(points);
+      let builder=window.supabaseClient
+        .from(EYEHAND_PATH_TABLE)
+        .upsert({ id:EYEHAND_PATH_ROW_ID, points:sanitized }, { onConflict:'id' })
+        .select('id, points, updated_at');
+      const exec=builder.maybeSingle? builder.maybeSingle(): builder.single();
+      const { data, error } = await exec;
+      if(error) throw error;
+      const payload=Array.isArray(data && data.points)? sanitizeEyehandPoints(data.points): sanitized;
+      writeEyehandPathToStorage(payload, { updatedAt: data && data.updated_at });
+      return { points: payload, updatedAt: data && data.updated_at };
+    }
+
+    async function deleteEyehandPathFromSupabase(){
+      if(!window.supabaseClient) return false;
+      const { error } = await window.supabaseClient
+        .from(EYEHAND_PATH_TABLE)
+        .delete()
+        .eq('id', EYEHAND_PATH_ROW_ID);
+      if(error && !handleSupabaseNotFound(error)) throw error;
+      localStorage.removeItem(LS_EYEHAND_PATH);
+      eyehandPathCache=null;
+      return true;
+    }
+
+    function scheduleEyehandPathHydration(retries){
+      if(window.supabaseClient){ requestEyehandPathHydration(); return; }
+      if(retries>0){ setTimeout(()=>scheduleEyehandPathHydration(retries-1), 1500); }
+    }
+
+    window.eyehandPathStore = {
+      storageKey: LS_EYEHAND_PATH,
+      canvasSize: { width: EYEHAND_CANVAS_WIDTH, height: EYEHAND_CANVAS_HEIGHT },
+      getCache: getEyehandPathCache,
+      readLocal: readEyehandPathFromStorage,
+      writeLocal: writeEyehandPathToStorage,
+      fetchRemote: fetchEyehandPathFromSupabase,
+      saveRemote: saveEyehandPathToSupabase,
+      deleteRemote: deleteEyehandPathFromSupabase,
+      requestHydration: requestEyehandPathHydration,
+      scheduleHydration: scheduleEyehandPathHydration,
+      sanitize: sanitizeEyehandPoints
+    };
+
     // דחיסת dataURL גדולה (הקטנת ממדים + המרת JPEG)
     async function compressDataUrl(dataUrl, maxW=1280, maxH=1280, quality=0.82){ return new Promise(res=>{ try{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; const scale=Math.min(1, maxW/w, maxH/h); if(scale<1){ w=Math.round(w*scale); h=Math.round(h*scale); } const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d'); g.drawImage(img,0,0,w,h); let out=c.toDataURL('image/jpeg', quality); // אם עדיין גדול מאוד נסה איכות נמוכה יותר
             if(out.length>dataUrl.length && quality>0.5){ out=c.toDataURL('image/jpeg', 0.7); }
@@ -306,14 +471,32 @@
       try{
         const remote = await window.examData.fetchActiveSettings();
         if(remote && remote.payload){
-          applyExternalConfig(remote.payload, true);
-          const statusEl = document.getElementById('saveStatus');
-          if(statusEl){
-            const ts = remote.created_at ? new Date(remote.created_at).toLocaleString('he-IL') : '';
-            statusEl.textContent = ts ? 'נטען מ-Supabase ('+ts+')' : 'נטען מ-Supabase';
-            statusEl.style.color = '#0ea5e9';
+          const payload=remote.payload;
+          const ts = remote.created_at ? new Date(remote.created_at).toLocaleString('he-IL') : '';
+          let appliedType='';
+          if(payload.settings || payload.north || payload.flightExam || payload.orientation){
+            applyExternalConfig(payload, true);
+            appliedType='bundle';
+          } else if(payload.testsLayout){
+            if(applyRemoteTestsLayout(payload.testsLayout)){
+              appliedType='testsLayout';
+            }
           }
-          console.log('[settings] remote settings applied from Supabase record', remote.id);
+          if(appliedType){
+            const statusEl = document.getElementById('saveStatus');
+            if(statusEl){
+              statusEl.textContent = ts ? 'נטען מ-Supabase ('+ts+')' : 'נטען מ-Supabase';
+              statusEl.style.color = '#0ea5e9';
+            }
+            if(appliedType==='testsLayout'){
+              const generalStatus=document.getElementById('generalTestsSaveStatus');
+              if(generalStatus){
+                generalStatus.textContent = ts ? 'הסדר עודכן מהשרת ('+ts+')' : 'הסדר עודכן מהשרת';
+                generalStatus.style.color = '#0ea5e9';
+              }
+            }
+            console.log(`[settings] remote ${appliedType} applied from Supabase record`, remote.id);
+          }
         }
       } catch(err){
         console.warn('[settings] hydrateSettingsFromSupabase failed', err);
@@ -329,6 +512,315 @@
       if(readyFn()){ hydrateSettingsFromSupabase(); return; }
       if(retries>0){ setTimeout(()=>scheduleHydrateFromSupabase(retries-1), 1500); }
     }
+
+    function clearTestSectionBindings(){
+      Object.keys(testSectionBindings).forEach(key=> delete testSectionBindings[key]);
+    }
+
+    function getTestSectionStorageKey(testId){
+      return LS_TEST_SECTION_PREFIX + testId;
+    }
+
+    function persistTestSectionLocal(testId, payload){
+      try{
+        localStorage.setItem(getTestSectionStorageKey(testId), JSON.stringify({ payload, savedAt: Date.now() }));
+      }catch(err){
+        console.warn('[settings] failed to persist test section locally', testId, err);
+      }
+    }
+
+    function readTestSectionLocal(testId){
+      try{
+        const raw=localStorage.getItem(getTestSectionStorageKey(testId));
+        if(!raw) return null;
+        const parsed=JSON.parse(raw);
+        if(parsed && parsed.payload) return parsed.payload;
+        return parsed || null;
+      }catch(err){
+        console.warn('[settings] failed to read test section cache', testId, err);
+        return null;
+      }
+    }
+
+    function getTestSectionTable(testId){
+      return TEST_SETTINGS_TABLES[testId] || null;
+    }
+
+    async function fetchTestSectionRemote(testId){
+      if(!window.supabaseClient) return null;
+      const table=getTestSectionTable(testId);
+      if(!table) return null;
+      let query=window.supabaseClient
+        .from(table)
+        .select('payload, updated_at')
+        .eq('id', TEST_SECTION_ROW_ID)
+        .limit(1);
+      const exec=query.maybeSingle? query.maybeSingle(): query.single();
+      const { data, error } = await exec;
+      if(error){
+        if(handleSupabaseNotFound(error)) return null;
+        throw error;
+      }
+      if(!data) return null;
+      return { payload: data.payload || null, updatedAt: data.updated_at || null };
+    }
+
+    async function saveTestSectionRemote(testId, payload){
+      if(!window.supabaseClient) throw new Error('Supabase לא מאותחל');
+      const table=getTestSectionTable(testId);
+      if(!table) throw new Error('לא נמצאה טבלה עבור המבחן');
+      const record={ id: TEST_SECTION_ROW_ID, payload };
+      let query=window.supabaseClient
+        .from(table)
+        .upsert(record, { onConflict: 'id' })
+        .select('updated_at');
+      const exec=query.maybeSingle? query.maybeSingle(): query.single();
+      const { data, error } = await exec;
+      if(error) throw error;
+      return data && data.updated_at ? data.updated_at : null;
+    }
+
+    function setTestSectionStatus(testId, text, tone){
+      const binding=testSectionBindings[testId];
+      if(!binding || !binding.statusEl) return;
+      const colors={ info:'#94a3b8', success:'#10b981', warn:'#f97316', error:'#ef4444' };
+      binding.statusEl.textContent=text;
+      binding.statusEl.style.color=colors[tone] || colors.info;
+    }
+
+    function collectSectionValues(section){
+      const data={};
+      if(!section) return data;
+      const fields=section.querySelectorAll('input, select, textarea');
+      fields.forEach(el=>{
+        if(!el || !el.id) return;
+        if(el.dataset && (el.dataset.persist==='ignore' || el.dataset.testSettingsIgnore==='true')) return;
+        if(el.type==='button' || el.type==='submit' || el.type==='file') return;
+        if(el.closest('.test-section-toolbar')) return;
+        if(el.type==='checkbox' || el.type==='radio'){
+          data[el.id]=!!el.checked;
+        } else if(el.tagName==='SELECT' && el.multiple){
+          data[el.id]=Array.from(el.selectedOptions).map(opt=>opt.value);
+        } else {
+          data[el.id]=el.value;
+        }
+      });
+      return data;
+    }
+
+    function applySectionValues(section, values){
+      if(!section || !values) return;
+      Object.keys(values).forEach(key=>{
+        const el=document.getElementById(key);
+        if(!el || !section.contains(el)) return;
+        if(el.dataset && (el.dataset.persist==='ignore' || el.dataset.testSettingsIgnore==='true')) return;
+        let changed=false;
+        if(el.type==='checkbox' || el.type==='radio'){
+          const next=!!values[key];
+          if(el.checked!==next){
+            el.checked=next;
+            changed=true;
+          }
+        } else if(el.tagName==='SELECT' && el.multiple){
+          const desired=Array.isArray(values[key]) ? values[key].map(v=>String(v)) : [];
+          const desiredSet=new Set(desired);
+          const currentSelected=Array.from(el.options).filter(opt=>opt.selected).map(opt=>opt.value);
+          let needsUpdate = desired.length!==currentSelected.length;
+          if(!needsUpdate){
+            for(const val of desired){ if(!currentSelected.includes(val)){ needsUpdate=true; break; } }
+            if(!needsUpdate){
+              for(const val of currentSelected){ if(!desiredSet.has(val)){ needsUpdate=true; break; } }
+            }
+          }
+          if(needsUpdate){
+            Array.from(el.options).forEach(opt=>{ opt.selected=desiredSet.has(opt.value); });
+            changed=true;
+          }
+        } else {
+          const next=values[key]===undefined || values[key]===null ? '' : String(values[key]);
+          if(el.value!==next){
+            el.value=next;
+            changed=true;
+          }
+        }
+        if(changed){
+          const eventName = el.tagName==='SELECT' || el.type==='checkbox' ? 'change' : 'input';
+          el.dispatchEvent(new Event(eventName, { bubbles:true }));
+        }
+      });
+    }
+
+    async function hydrateTestSection(testId, options){
+      const binding=testSectionBindings[testId];
+      if(!binding || !binding.section) return;
+      const opts=options || {};
+      let applied=false;
+      if(opts.preferRemote && window.supabaseClient){
+        try{
+          const remote=await fetchTestSectionRemote(testId);
+          if(remote && remote.payload){
+            applySectionValues(binding.section, remote.payload);
+            persistTestSectionLocal(testId, remote.payload);
+            const ts=remote.updatedAt ? new Date(remote.updatedAt).toLocaleString('he-IL') : '';
+            setTestSectionStatus(testId, ts? `✅ נטען מ-Supabase (${ts})` : '✅ נטען מ-Supabase', 'success');
+            applied=true;
+          }
+        }catch(err){
+          if(!opts.silent) console.warn(`[settings:${testId}] remote load failed`, err);
+          setTestSectionStatus(testId, '❌ שגיאה בטעינת Supabase', 'error');
+        }
+      }
+      if(!applied){
+        const local=readTestSectionLocal(testId);
+        if(local){
+          applySectionValues(binding.section, local);
+          setTestSectionStatus(testId, 'ℹ️ נטען מהגיבוי המקומי', 'warn');
+        } else if(!opts.silent){
+          setTestSectionStatus(testId, 'אין נתונים שמורים עדיין', 'info');
+        }
+      }
+    }
+
+    function getTestSectionLabel(testId){
+      return TEST_SECTION_LABELS[testId] || ('מבחן '+testId);
+    }
+
+    function hasSectionPayload(payload){
+      if(!payload) return false;
+      const keys=Object.keys(payload);
+      if(!keys.length) return false;
+      return keys.some(key=>{
+        const value=payload[key];
+        if(Array.isArray(value)) return value.length>0;
+        if(value===null || value===undefined) return false;
+        if(typeof value==='string') return value.trim()!=='';
+        return true;
+      });
+    }
+
+    async function saveTestSectionById(testId, options){
+      const binding=testSectionBindings[testId];
+      if(!binding || !binding.section){ return { status:'missing', testId }; }
+      const opts=options || {};
+      const payload=opts.payload || collectSectionValues(binding.section);
+      if(!hasSectionPayload(payload)){
+        if(!opts.silent && !opts.skipAlert){
+          alert('לא נמצאו שדות לשמירה עבור "'+getTestSectionLabel(testId)+'"');
+        }
+        return { status:'empty', testId };
+      }
+      const label=getTestSectionLabel(testId);
+      const skipButton=opts.skipButton===true;
+      const saveBtn=!skipButton && binding.saveBtn? binding.saveBtn : null;
+      const originalLabel=saveBtn? saveBtn.textContent : '';
+      if(saveBtn){
+        saveBtn.disabled=true;
+        saveBtn.textContent=opts.pendingLabel || '⏳ שומר...';
+      }
+      try{
+        let updatedAt=null;
+        let mode='local';
+        if(window.supabaseClient){
+          updatedAt=await saveTestSectionRemote(testId, payload);
+          mode='remote';
+          const ts=updatedAt? new Date(updatedAt).toLocaleTimeString('he-IL') : '';
+          setTestSectionStatus(testId, ts? `✅ נשמר ב-Supabase (${ts})` : '✅ נשמר ב-Supabase', 'success');
+        } else {
+          persistTestSectionLocal(testId, payload);
+          setTestSectionStatus(testId, '⚠️ נשמר מקומית בלבד (אופליין)', 'warn');
+        }
+        persistTestSectionLocal(testId, payload);
+        if(!opts.silent && !opts.skipAlert){
+          alert(`ההגדרות עבור "${label}" נשמרו בהצלחה`);
+        }
+        return { status:'success', testId, updatedAt, mode };
+      }catch(err){
+        console.error(`[settings:${testId}] save failed`, err);
+        setTestSectionStatus(testId, '❌ שמירה נכשלה', 'error');
+        if(!opts.silent && !opts.skipAlert){
+          alert('❌ שגיאה בשמירת "'+label+'": '+(err && err.message? err.message : err));
+        }
+        return { status:'error', testId, error:err };
+      }finally{
+        if(saveBtn){
+          saveBtn.disabled=false;
+          saveBtn.textContent=originalLabel;
+        }
+      }
+    }
+
+    async function bulkSaveAllTestSections(options){
+      const ids=Object.keys(testSectionBindings);
+      const results=[];
+      for(const testId of ids){
+        const binding=testSectionBindings[testId];
+        if(!binding || !binding.section){
+          results.push({ status:'missing', testId });
+          continue;
+        }
+        const payload=collectSectionValues(binding.section);
+        if(!hasSectionPayload(payload)){
+          results.push({ status:'empty', testId });
+          continue;
+        }
+        const res=await saveTestSectionById(testId, Object.assign({}, options||{}, {
+          payload,
+          skipButton:true,
+          silent: options && options.silent!==undefined? options.silent : true,
+          skipAlert:true
+        }));
+        results.push(res);
+      }
+      return results;
+    }
+
+    function enhanceTestSection(testId){
+      const section=document.querySelector(`.settings-section[data-tab-section="${testId}"]`);
+      if(!section || section.dataset.testSettingsInitialized==='true') return;
+      section.dataset.testSettingsInitialized='true';
+      const toolbar=document.createElement('div');
+      toolbar.className='test-section-toolbar';
+      toolbar.style.cssText='display:flex;gap:12px;align-items:center;margin:12px 0 18px;flex-wrap:wrap;';
+      const saveBtn=document.createElement('button');
+      saveBtn.type='button';
+      saveBtn.className='btn btn-primary';
+      saveBtn.style.padding='8px 16px';
+      saveBtn.textContent='💾 שמור הגדרות המבחן';
+      const status=document.createElement('span');
+      status.style.fontSize='0.85rem';
+      status.style.color='var(--text-secondary)';
+      toolbar.appendChild(saveBtn);
+      toolbar.appendChild(status);
+      const header=section.querySelector('h3');
+      if(header && header.nextSibling){
+        section.insertBefore(toolbar, header.nextSibling);
+      } else {
+        section.insertBefore(toolbar, section.firstChild);
+      }
+
+      saveBtn.addEventListener('click', ()=>{
+        saveTestSectionById(testId, { silent:false });
+      });
+
+      testSectionBindings[testId]={ section, statusEl: status, saveBtn };
+      hydrateTestSection(testId, { preferRemote: !!window.supabaseClient });
+    }
+
+    function initTestSectionPersistence(){
+      Object.keys(TEST_SETTINGS_TABLES).forEach(testId=> enhanceTestSection(testId));
+    }
+
+    function scheduleTestSectionRemoteHydration(retries){
+      const ids=Object.keys(testSectionBindings);
+      if(!ids.length) return;
+      if(window.supabaseClient){
+        ids.forEach(id=> hydrateTestSection(id, { preferRemote:true, silent:true }));
+        return;
+      }
+      if(retries>0){
+        setTimeout(()=> scheduleTestSectionRemoteHydration(retries-1), 1500);
+      }
+    }
   
     const adminBtn=document.getElementById('admin-button');
     const adminScreen=document.getElementById('admin-screen');
@@ -338,6 +830,7 @@
     // Build modern admin UI
     function buildAdminUI(){
         if(!adminSettingsBox) return;
+      clearTestSectionBindings();
   
         // הזרקת סטייל חד־פעמית לסרגל השמירה (אם טרם קיים)
         if(!document.getElementById('adminSaveBarStyles')){
@@ -421,6 +914,12 @@
               </thead>
               <tbody id="testsOrderConfig"></tbody>
             </table>
+            <div class="general-tests-actions" style="display:flex;gap:12px;align-items:center;margin-top:16px;flex-wrap:wrap;">
+              <button id="btnSaveGeneralTests" type="button" class="btn" style="background:#0ea5e9;color:#fff;padding:10px 20px;border-radius:10px;font-weight:600;box-shadow:0 4px 12px rgba(14,165,233,0.25);">
+                💾 שמור סדר וכלילת מבחנים
+              </button>
+              <span id="generalTestsSaveStatus" style="font-size:0.85rem;color:var(--text-secondary);"></span>
+            </div>
           </div>
 
           <!-- User Management Tab -->
@@ -600,6 +1099,28 @@
                 <label for="eyehandExamCountdownSec">המתנה למבחן (שניות)</label>
                 <input id="eyehandExamCountdownSec" type="number" min="0" max="60" value="5">
                 <span class="form-hint">זמן המתנה מסיום התרגול ועד התחלת המבחן</span>
+              </div>
+            </div>
+            
+            <!-- Custom Path Drawing Section -->
+            <div style="margin-top:30px;border-top:1px solid var(--border-color);padding-top:20px">
+              <h4 style="margin-bottom:15px">🎨 עריכת מסלול מותאם אישית למבחן</h4>
+              <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:15px">
+                לחץ על "מצב עריכה" ואז לחץ על הקנבס להוספת נקודות. קו יימתח בין הנקודות. הנקודה הראשונה (ירוקה) היא ההתחלה והאחרונה (אדומה) היא הסיום.
+              </p>
+              <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
+                <button type="button" id="eyehandPathEditMode" class="btn btn-primary" style="padding:8px 16px">✏️ מצב עריכה</button>
+                <button type="button" id="eyehandPathUndo" class="btn btn-secondary" style="padding:8px 16px" disabled>↩️ בטל אחרון</button>
+                <button type="button" id="eyehandPathClear" class="btn btn-secondary" style="padding:8px 16px">🗑️ נקה הכל</button>
+                <button type="button" id="eyehandPathSave" class="btn btn-primary" style="padding:8px 16px">💾 שמור מסלול</button>
+                <button type="button" id="eyehandPathDefault" class="btn btn-secondary" style="padding:8px 16px">↩️ חזור לברירת מחדל</button>
+              </div>
+              <div id="eyehandPathStatus" style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px">לא נשמר מסלול מותאם אישית</div>
+              <div id="eyehandPathInstructions" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:0.85rem;color:#92400e">
+                <strong>מצב עריכה פעיל:</strong> לחץ להוספת נקודה | גרור נקודה להזזה | לחץ ימני על נקודה למחיקה | לחץ שוב על "מצב עריכה" לסיום
+              </div>
+              <div style="border:2px solid var(--border-color);border-radius:12px;overflow:hidden;background:#f8fafc;position:relative" id="eyehandCanvasContainer">
+                <canvas id="eyehandPathCanvas" width="800" height="450" style="display:block;width:100%;cursor:default"></canvas>
               </div>
             </div>
           </div>
@@ -1047,6 +1568,106 @@
           buildTestSelectorUI();
         });
       });
+    }
+
+    function buildGeneralTestsLayoutSnapshot(){
+      return {
+        version:1,
+        savedAt:new Date().toISOString(),
+        tests: settings.tests.map((test,index)=>({
+          id:test.id,
+          name:test.name || '',
+          include: !!test.include,
+          order:index
+        }))
+      };
+    }
+
+    function applyRemoteTestsLayout(layout){
+      if(!layout || !Array.isArray(layout.tests)) return false;
+      const normalized=layout.tests
+        .map((item, idx)=>{
+          if(!item || !item.id) return null;
+          const order=Number.isFinite(Number(item.order))? Number(item.order) : idx;
+          return {
+            id:String(item.id),
+            include: typeof item.include==='undefined'? undefined : !!item.include,
+            order
+          };
+        })
+        .filter(Boolean)
+        .sort((a,b)=>a.order-b.order);
+      if(!normalized.length) return false;
+      const orderMap=new Map();
+      normalized.forEach((entry, idx)=>{ orderMap.set(entry.id, Object.assign({}, entry, { resolvedOrder: idx })); });
+      settings.tests = settings.tests.slice().sort((a,b)=>{
+        const ao=orderMap.has(a.id)? orderMap.get(a.id).resolvedOrder : Number.MAX_SAFE_INTEGER;
+        const bo=orderMap.has(b.id)? orderMap.get(b.id).resolvedOrder : Number.MAX_SAFE_INTEGER;
+        return ao-bo;
+      });
+      settings.tests.forEach(test=>{
+        const entry=orderMap.get(test.id);
+        if(entry && typeof entry.include!=='undefined'){
+          test.include=entry.include;
+        }
+      });
+      save(LS_KEY, settings);
+      rebuildTestsConfig();
+      buildTestSelectorUI();
+      applyNavVisibility();
+      return true;
+    }
+
+    async function saveGeneralTestsLayout(){
+      const btn=document.getElementById('btnSaveGeneralTests');
+      const status=document.getElementById('generalTestsSaveStatus');
+      if(!btn) return;
+      const originalLabel=(btn.textContent||'').trim() || '💾 שמור סדר וכלילת מבחנים';
+      btn.disabled=true;
+      btn.textContent='⏳ שומר סדר...';
+      if(status){ status.textContent='שומר את סדר המבחנים...'; status.style.color='#94a3b8'; }
+      // עדכון מקומי מיידי
+      save(LS_KEY, settings);
+      applyNavVisibility();
+      buildTestSelectorUI();
+      rebuildTestsConfig();
+      const payload=buildGeneralTestsLayoutSnapshot();
+      try{
+        const canSaveRemote = window.examData && typeof window.examData.saveSettingsBundle==='function'
+          && (typeof window.examData.isReady!=='function' || window.examData.isReady());
+        if(canSaveRemote){
+          const metaUser = window.testAuth && typeof window.testAuth.getCurrentUser==='function'
+            ? window.testAuth.getCurrentUser()
+            : 'admin-panel';
+          await window.examData.saveSettingsBundle({ testsLayout: payload }, { createdBy: metaUser, description:'general tests layout' });
+          if(status){
+            status.textContent='✓ הסדר נשמר ב-Supabase '+new Date().toLocaleTimeString('he-IL');
+            status.style.color='#10b981';
+          }
+        } else {
+          if(status){
+            status.textContent='⚠️ נשמר מקומית בלבד (אין חיבור ל-Supabase)';
+            status.style.color='#f97316';
+          }
+        }
+      }catch(err){
+        console.error('[settings] general tests save failed', err);
+        if(status){
+          status.textContent='❌ שמירה נכשלה';
+          status.style.color='#ef4444';
+        }
+        alert('❌ שמירת סדר המבחנים נכשלה: '+(err && err.message? err.message : err));
+      }finally{
+        btn.disabled=false;
+        btn.textContent=originalLabel;
+      }
+    }
+
+    function setupGeneralTestsSave(){
+      const btn=document.getElementById('btnSaveGeneralTests');
+      const status=document.getElementById('generalTestsSaveStatus');
+      if(status){ status.textContent=''; status.style.color='var(--text-secondary)'; }
+      if(btn){ btn.onclick=saveGeneralTestsLayout; }
     }
   
     function syncAllTestFields(){
@@ -2186,9 +2807,39 @@
         saveNewExamParts();
         applyNavVisibility();
         buildTestSelectorUI();
-        if(saveStatusEl){ saveStatusEl.textContent='נשמר מקומית...'; saveStatusEl.style.color='#94a3b8'; }
-        await syncSettingsToSupabase(saveStatusEl);
-        alert('✅ כל ההגדרות נשמרו בהצלחה!');
+        if(saveStatusEl){
+          saveStatusEl.textContent='שומר את כל עמודי ההגדרות...';
+          saveStatusEl.style.color='#94a3b8';
+        }
+        const sectionResults=await bulkSaveAllTestSections({ silent:true });
+        const failedSections=sectionResults.filter(r=>r.status==='error');
+        const successSections=sectionResults.filter(r=>r.status==='success');
+        const remoteCount=successSections.filter(r=>r.mode==='remote').length;
+        const localOnlyCount=successSections.filter(r=>r.mode!=='remote').length;
+        if(saveStatusEl){
+          if(failedSections.length){
+            const names=failedSections.map(r=> getTestSectionLabel(r.testId)).join(', ');
+            saveStatusEl.textContent='❌ שגיאה בשמירת: '+names;
+            saveStatusEl.style.color='#ef4444';
+          } else {
+            let text='✓ כל עמודי המבחנים נשמרו';
+            if(remoteCount && localOnlyCount){ text+=` (${remoteCount} ב-Supabase, ${localOnlyCount} מקומי)`; }
+            else if(remoteCount){ text+=' (ב-Supabase)'; }
+            else if(localOnlyCount){ text+=' (אופליין מקומי)'; }
+            saveStatusEl.textContent=text;
+            saveStatusEl.style.color='#10b981';
+          }
+        }
+        if(failedSections.length){
+          const names=failedSections.map(r=> getTestSectionLabel(r.testId)).join(', ');
+          alert('❌ חלק מהעמודים לא נשמרו: '+names);
+        } else if(remoteCount && localOnlyCount){
+          alert('✅ ההגדרות נשמרו – חלקן ב-Supabase וחלקן מקומית (בדוק את החיבור עבור העמודים שנותרו אופליין).');
+        } else if(remoteCount){
+          alert('✅ כל ההגדרות נשמרו ב-Supabase!');
+        } else {
+          alert('✅ כל ההגדרות נשמרו מקומית (אין חיבור ל-Supabase).');
+        }
       };
       if(exportBtn) exportBtn.onclick=()=>{ exportAllSettings(); };
       if(exportZipBtn) exportZipBtn.onclick=()=>{ exportSettingsZip(); };
@@ -3007,6 +3658,8 @@
       setEmpty(true);
       window.refreshExamUsersList = loadUsers;
       loadUsers();
+      initTestSectionPersistence();
+      scheduleTestSectionRemoteHydration(6);
     }
   
     // Password lock
@@ -3025,6 +3678,7 @@
           adminSettingsBox.style.display='flex';
           buildAdminUI();
           rebuildTestsConfig();
+          setupGeneralTestsSave();
           syncGeneralFields();
           syncAllTestFields(); // סנכרון כל המבחנים
           setupNorth();
@@ -3061,6 +3715,7 @@
       orientation=sanitizeOrientationConfig(load(LS_ORIENTATION, DEFAULT_ORIENTATION));
       buildAdminUI();
       rebuildTestsConfig();
+      setupGeneralTestsSave();
       setupUserManagement();
       applyNavVisibility();
       syncNewExamTiming();
@@ -3930,6 +4585,13 @@
       document.addEventListener('keydown', escHandler);
     }
 
+    // === Eye-Hand Custom Path Helpers ===
+    window.getEyehandCustomPath = function() {
+      const cached = getEyehandPathCache();
+      if(window.supabaseClient){ requestEyehandPathHydration(); }
+      return cached && cached.length>1 ? cached : null;
+    };
+
     // אם כבר אותחל הממשק ו-Supabase קיים נטען מיד (למקרה שהטאב פעיל כברירת מחדל)
     if(window.supabaseClient){ 
       setTimeout(()=>{ 
@@ -3963,4 +4625,7 @@
     }
     buildTestSelectorUI();
     scheduleHydrateFromSupabase(5);
+    scheduleEyehandPathHydration(8);
+
+    import('./settings/eyehand.js').catch(err=> console.warn('[settings] failed to load eyehand settings module', err));
   })();

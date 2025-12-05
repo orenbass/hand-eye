@@ -512,9 +512,10 @@
         <div style="font-size:2.4rem;margin-bottom:10px">🧭</div>
         <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
         <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          בלחיצה על הכפתור הבא <strong>המבחן האמיתי יתחיל מיד</strong>. התמונות שתקבלו כעת יספרו לציון הרשמי, לכן ודאו שאתם מוכנים.
+          בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
+ודא שאתה מוכן לפני המעבר למבחן.
         </p>
-        <button type="button" data-action="confirm" style="padding:12px 20px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
     `;
     modal.style.display = 'flex';
     const confirmBtn = modal.querySelector('[data-action="confirm"]');
@@ -531,9 +532,10 @@
     const contentBox = modal.querySelector('div');
     contentBox.innerHTML = `
         <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
-        <h2 style="margin:0 0 12px;font-size:1.45rem;">מתחילים בתרגול</h2>
+        <h2 style="margin:0 0 12px;font-size:1.45rem;">תרגול ניסיון לפני המבחן האמיתי</h2>
         <p style="margin:0 0 20px;font-size:1rem;color:#475569;line-height:1.6;">
-          המבחן הראשון הוא תרגול בלבד ולא יכנס לציון הסופי ומטרתו היא להכיר את המבחן ולהתנסות בו.
+         לפניך שלב תרגול לניסיון בלבד. מטרתו לאפשר היכרות והתנסות קצרה עם התרגיל.
+לאחר סיום התרגול יתחיל המבחן האמיתי, ובסופו יחושב הציון.
         </p>
         <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
     `;
@@ -568,20 +570,58 @@
       ? 'התבונן במפת התרגול – אין ניקוד. השעון העליון מציג את זמן הצפייה ולאחריו תינתן דקה לבחור תשובה.'
       : 'התבונן במפת הבחינה – התשובה תיספר לציון. השעון העליון מציג את זמן הצפייה ולאחריו תינתן דקה לבחור תשובה.';
     const compassHtml = cfg.showCompass ? `
-        <div style="position: absolute; top: 16px; left: 16px; z-index: 10; display:flex; flex-direction:column; align-items:center; gap:8px;">
-          <div style="width: 86px; height: 86px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.45); border: 4px solid white;">
-            <div style="font-size: 38px; margin-bottom: -8px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.35);">↑</div>
-            <div style="font-size: 26px; font-weight: 700; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.35);">N</div>
-          </div>
-          <div style="background: rgba(0,0,0,0.78); color: white; padding: 6px 14px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.35);">
-            הצפון למעלה
+        <div style="position: absolute; top: 16px; left: 16px; z-index: 10;">
+          <div style="width: 150px; height: 150px; background: rgba(15, 23, 42, 0.75); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0,0,0,0.5), inset 0 0 15px rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(4px);">
+            <svg width="140" height="140" viewBox="-20 -20 160 160" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
+              <defs>
+                <linearGradient id="gradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#cbd5e1;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="gradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#334155;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+              
+              <!-- Secondary Points -->
+              <path d="M60 60 L82 38 L60 60 L82 82 L60 60 L38 82 L60 60 L38 38 Z" fill="#94a3b8" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- Main Points -->
+              <!-- North -->
+              <path d="M60 20 L68 60 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              <path d="M60 20 L52 60 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- East -->
+              <path d="M100 60 L60 68 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              <path d="M100 60 L60 52 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- South -->
+              <path d="M60 100 L52 60 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              <path d="M60 100 L68 60 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+
+              <!-- West -->
+              <path d="M20 60 L60 52 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              <path d="M20 60 L60 68 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+
+              <!-- Center Detail -->
+              <circle cx="60" cy="60" r="4" fill="#fff" stroke="#cbd5e1" stroke-width="1" />
+
+              <!-- Labels -->
+              <text x="60" y="12" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">צפון</text>
+              <text x="60" y="118" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">דרום</text>
+              <text x="115" y="65" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">מזרח</text>
+              <text x="5" y="65" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">מערב</text>
+            </svg>
           </div>
         </div>` : '';
     const mainHtml = `
       <div class="orientation-main-panel">
         <div class="orientation-image-wrapper">
-          ${compassHtml}
-          <img src="${q._topImgEl ? q._topImgEl.src : q.topImage}" alt="תצוגת מבט על" />
+          <div style="position: relative; display: inline-block; width: auto; height: auto; max-width: 100%; max-height: 100%;">
+            ${compassHtml}
+            <img src="${q._topImgEl ? q._topImgEl.src : q.topImage}" alt="תצוגת מבט על" style="display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 12px;" />
+          </div>
         </div>
       </div>`;
     const footerHtml = `
@@ -672,12 +712,48 @@
     const cfg = getConfig();
     const compassModal = cfg.showCompass ? `
         <div style="position: absolute; top: 20px; left: 20px; z-index: 10;">
-          <div style="width: 100px; height: 100px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(0,0,0,0.5); border: 4px solid white;">
-            <div style="font-size: 40px; margin-bottom: -8px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">↑</div>
-            <div style="font-size: 28px; font-weight: bold; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">N</div>
-          </div>
-          <div style="margin-top: 8px; background: rgba(0,0,0,0.8); color: white; padding: 6px 12px; border-radius: 8px; text-align: center; font-size: 14px; font-weight: bold; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
-            הצפון למעלה
+          <div style="width: 150px; height: 150px; background: rgba(15, 23, 42, 0.75); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 25px rgba(0,0,0,0.5), inset 0 0 15px rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(4px);">
+            <svg width="140" height="140" viewBox="-20 -20 160 160" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));">
+              <defs>
+                <linearGradient id="gradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#cbd5e1;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="gradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#334155;stop-opacity:1" />
+                  <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+                </linearGradient>
+              </defs>
+              
+              <!-- Secondary Points -->
+              <path d="M60 60 L82 38 L60 60 L82 82 L60 60 L38 82 L60 60 L38 38 Z" fill="#94a3b8" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- Main Points -->
+              <!-- North -->
+              <path d="M60 20 L68 60 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              <path d="M60 20 L52 60 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- East -->
+              <path d="M100 60 L60 68 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              <path d="M100 60 L60 52 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              
+              <!-- South -->
+              <path d="M60 100 L52 60 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+              <path d="M60 100 L68 60 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+
+              <!-- West -->
+              <path d="M20 60 L60 52 L60 60 Z" fill="url(#gradDark)" stroke="#fff" stroke-width="0.5" />
+              <path d="M20 60 L60 68 L60 60 Z" fill="url(#gradLight)" stroke="#fff" stroke-width="0.5" />
+
+              <!-- Center Detail -->
+              <circle cx="60" cy="60" r="4" fill="#fff" stroke="#cbd5e1" stroke-width="1" />
+
+              <!-- Labels -->
+              <text x="60" y="12" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">צפון</text>
+              <text x="60" y="118" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">דרום</text>
+              <text x="115" y="65" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">מזרח</text>
+              <text x="5" y="65" text-anchor="middle" fill="#fff" font-size="15" font-weight="800" style="text-shadow:0 2px 4px rgba(0,0,0,0.8); font-family: sans-serif;">מערב</text>
+            </svg>
           </div>
         </div>` : '';
     const modal = document.createElement('div');

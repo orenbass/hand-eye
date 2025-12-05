@@ -28,6 +28,10 @@
     if(processing || !queue.length) return;
     if(!navigator.onLine) return;
     if(!window.supabaseClient) return;
+    if(!window.examData || typeof window.examData.recordAttempt!=='function' || (typeof window.examData.isReady==='function' && !window.examData.isReady())){
+      console.warn('[offline-queue] examData not ready, deferring flush');
+      return;
+    }
     processing = true;
     while(queue.length > 0){
       const item = queue[0];
@@ -39,7 +43,7 @@
           saveQueue();
           continue;
         }
-        // Send to Supabase
+          // Send to Supabase
         const { error } = await window.supabaseClient.from('exam_user_attempts').insert([payload]);
         if(error) throw error;
         queue.shift(); // success
