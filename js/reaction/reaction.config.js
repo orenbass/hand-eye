@@ -2,6 +2,7 @@
 // Derives dynamic configuration for reaction test from global settings
 export function getReactionConfig() {
   const baseCfg = (window.getTestConfig ? window.getTestConfig('reaction') : null) || {};
+  console.log('[reaction.config] baseCfg:', JSON.stringify(baseCfg));
   const hebDifficulty = baseCfg.difficulty || 'קל';
   const HEB_DIFF_MAP = { 'קל':'easy', 'בינוני':'medium', 'קשה':'hard' };
   const difficulty = HEB_DIFF_MAP[hebDifficulty] || 'easy';
@@ -19,6 +20,8 @@ export function getReactionConfig() {
   const practiceSeconds = baseCfg.practiceSeconds ? Math.max(5, +baseCfg.practiceSeconds) : 20;
   const practiceRuns = Math.max(1, baseCfg.practiceRuns || 1);
   const examCountdownSec = Math.max(0, baseCfg.examCountdownSec || 5);
+
+  console.log('[reaction.config] practiceSeconds:', practiceSeconds, 'from baseCfg.practiceSeconds:', baseCfg.practiceSeconds);
 
   return {
     difficulty,

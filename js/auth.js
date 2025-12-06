@@ -9,6 +9,15 @@
     let attemptCounts = {}; // testId -> attempts
     
     let testOrder = []; // סדר דינמי ייקבע מההגדרות
+    let previewState = {
+        active: false,
+        testId: null,
+        returnTest: 'admin',
+        reopenSettings: false
+    };
+
+    function isPreviewMode(){ return previewState.active === true; }
+    function isEffectiveAdmin(){ return isAdmin && !isPreviewMode(); }
 
     function getSettingsObject(){
         if(window.appSettings && Array.isArray(window.appSettings.tests)) return window.appSettings;
@@ -23,16 +32,22 @@
             // fallback אם אין הגדרות עדיין
             testOrder = [];
         }
-        console.log('[auth] testOrder refreshed', testOrder);
+        console.log('[auth] testOrder refreshed:', testOrder);
+        if(testOrder.length > 0 && testOrder[0] === 'orientation'){
+             console.warn('[auth] ⚠️ Orientation is first in testOrder! This comes from Supabase settings.');
+             console.warn('[auth] If this is incorrect, please update the test order in the Admin Panel.');
+        }
     }
     function selectFirstAvailable(){
-        refreshTestOrder();
         // מצא את המבחן הבא שעדיין לא הושלם (המשך מאיפה שעצר)
+        // הערה: לא קוראים ל-refreshTestOrder כאן כי מי שקורא לפונקציה הזו כבר עושה refresh לפני
         let nextTest = null;
+        console.log('[auth] selectFirstAvailable checking against completed:', [...completedTests]);
         for(let i = 0; i < testOrder.length; i++){
             const testId = testOrder[i];
             if(!completedTests.has(testId)){
                 nextTest = testId;
+                console.log('[auth] Found next available test:', nextTest);
                 break;
             }
         }
@@ -65,6 +80,10 @@
         completedTests = new Set();
         attemptCounts = {};
         testScores = [];
+        previewState.active = false;
+        previewState.testId = null;
+        previewState.returnTest = 'admin';
+        previewState.reopenSettings = false;
     }
 
     function validateID(id) {
@@ -205,12 +224,28 @@
           try {
             const remoteSettings = await service.fetchActiveSettings();
             if(remoteSettings && remoteSettings.payload && remoteSettings.payload.settings && Array.isArray(remoteSettings.payload.settings.tests)){
-              requiredTests = remoteSettings.payload.settings.tests
+              const remoteTestsConfig = remoteSettings.payload.settings;
+              requiredTests = remoteTestsConfig.tests
                 .filter(t => t.include !== false)
                 .map(t => t.id);
               console.log('[auth] Loaded required tests from database:', requiredTests);
-              // שמור את רשימת המבחנים הנדרשים בסשן
+              // עדכן את window.appSettings כדי ש-refreshTestOrder יעבוד נכון
+              if(!window.appSettings) window.appSettings = {};
+              window.appSettings.tests = remoteTestsConfig.tests;
+              // שמור גם ב-localStorage
+              localStorage.setItem('app.settings.v1', JSON.stringify(window.appSettings));
               localStorage.setItem('requiredTests', JSON.stringify(requiredTests));
+              // שלח אירוע עדכון הגדרות כדי שהניווט יתעדכן
+              window.dispatchEvent(new Event('settings-updated'));
+              console.log('[auth] Dispatched settings-updated event');
+              
+              // בנייה מחדש של ה-UI באופן יזום אם הפונקציה קיימת
+              if(typeof window.buildTestSelectorUI === 'function'){
+                  console.log('[auth] Calling buildTestSelectorUI explicitly');
+                  window.buildTestSelectorUI();
+              } else {
+                  console.warn('[auth] window.buildTestSelectorUI is not available');
+              }
             }
           } catch(err){
             console.warn('[auth] Failed to load settings from database, using local config', err);
@@ -248,10 +283,35 @@
         }
         persistSession();
         refreshTestOrder();
+        updateWelcomeGreeting();
         return true;
     }
     
+    function updateWelcomeGreeting(){
+        // עדכן ברכה במסך ההוראות
+        const greetingEl = document.getElementById('welcome-greeting');
+        if(greetingEl) greetingEl.style.display = 'none'; // הסתרה קבועה לפי בקשת משתמש
+        
+        // עדכן ברכה במסך ההקדמה הכללי
+        const introGreetingEl = document.getElementById('intro-welcome-greeting');
+        const introNameEl = document.getElementById('intro-user-name');
+        
+        const shouldShow = currentUserRecord && currentUserRecord.full_name && !currentUserRecord.is_admin;
+        const userName = shouldShow ? currentUserRecord.full_name : '';
+        
+        // מסך ההקדמה הכללי
+        if(introGreetingEl && introNameEl){
+            if(shouldShow){
+                introNameEl.textContent = userName;
+                introGreetingEl.style.display = 'block';
+            } else {
+                introGreetingEl.style.display = 'none';
+            }
+        }
+    }
+    
     function logout() {
+        exitPreviewMode();
         resetSessionState();
         localStorage.removeItem('currentUser');
         localStorage.removeItem('currentUserUuid');
@@ -260,6 +320,9 @@
         localStorage.removeItem('completedTests');
         localStorage.removeItem('testScores');
         localStorage.removeItem('attemptCounts');
+        // הסתר ברכת שלום
+        const greetingEl = document.getElementById('welcome-greeting');
+        if(greetingEl) greetingEl.style.display = 'none';
     }
     
     function markTestCompleted(testName) {
@@ -357,26 +420,43 @@
         testScores = testScores.filter(s=>s.id!==testName); testScores.push({id:testName, score:score}); localStorage.setItem('testScores', JSON.stringify(testScores));
         persistSession();
         const nextTest = getNextTest(testName);
+        const effectiveAdmin = isEffectiveAdmin();
+        const previewActive = isPreviewMode();
         
-        if (!isAdmin) {
-            // הסתרת תיבת ציון למשתמש רגיל
+        if (!effectiveAdmin) {
+            // הסתרת תיבת ציון למשתמש רגיל או במצב תצוגה
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='none';
         } else {
             scoreEl.textContent = score;
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='block';
         }
         
-        if (nextTest && !isAdmin) {
+        if (previewActive) {
+            nextBtn.style.display='none';
+            finishBtn.style.display='block';
+            finishBtn.textContent='חזרה להגדרות';
+            finishBtn.onclick=()=>{
+                modal.style.display='none';
+                const target = previewState.returnTest || 'admin';
+                const reopen = !!previewState.reopenSettings;
+                exitPreviewMode();
+                if(window.switchTest && target){ window.switchTest(target); }
+                if(reopen){
+                    const settingsPanel = document.getElementById('settingsPanel');
+                    if(settingsPanel) settingsPanel.classList.add('open');
+                }
+            };
+        } else if (nextTest && !effectiveAdmin) {
             nextBtn.style.display='block'; finishBtn.style.display='none';
             nextBtn.textContent='המשך';
             nextBtn.onclick=()=>{ modal.style.display='none'; if(window.switchTest) window.switchTest(nextTest); };
-        } else if (nextTest && isAdmin) {
+        } else if (nextTest && effectiveAdmin) {
             nextBtn.style.display='block'; finishBtn.style.display='none';
             nextBtn.onclick=()=>{ modal.style.display='none'; if(window.switchTest) window.switchTest(nextTest); };
         } else {
             // אין מבחן הבא => סיום כל המבחנים
             nextBtn.style.display='none'; finishBtn.style.display='block';
-            if (!isAdmin) {
+            if (!effectiveAdmin) {
                 finishBtn.textContent='סיים';
                 finishBtn.onclick=()=>{ logout(); modal.style.display='none'; showLoginScreen(); };
             } else {
@@ -429,6 +509,7 @@
                 updateTestButtons();
                 hideUserStatsIfNeeded();
                 applyBodyMode();
+                updateWelcomeGreeting(); // הצג ברכת שלום
                 if(!isAdmin) {
                     showIntroScreen();
                 }
@@ -469,13 +550,41 @@
         });
     }
     
-    function hideUserStatsIfNeeded(){
-        if(!isAdmin){
-            document.querySelectorAll('.test-stats, .stats-bar, .final-score-box, .results-details').forEach(el=>{ el.style.display='none'; });
-        }
+    function enterPreviewMode(testId, options){
+        if(previewState.active) exitPreviewMode();
+        const opts = options || {};
+        previewState.active = true;
+        previewState.testId = testId || null;
+        previewState.returnTest = opts.returnTest || 'admin';
+        previewState.reopenSettings = !!opts.reopenSettings;
+        applyBodyMode();
+        hideUserStatsIfNeeded();
     }
 
-    function applyBodyMode(){ const b=document.body; if(!b) return; if(isAdmin) b.classList.remove('user-mode'); else b.classList.add('user-mode'); }
+    function exitPreviewMode(){
+        if(!previewState.active) return;
+        previewState.active = false;
+        previewState.testId = null;
+        previewState.returnTest = 'admin';
+        previewState.reopenSettings = false;
+        applyBodyMode();
+        hideUserStatsIfNeeded();
+    }
+
+    function hideUserStatsIfNeeded(){
+        const hide = !isEffectiveAdmin();
+        const targets = document.querySelectorAll('.test-stats, .stats-bar, .final-score-box, .results-details');
+        targets.forEach(el=>{
+            if(!el) return;
+            if(hide){ el.style.display='none'; }
+            else { el.style.removeProperty('display'); }
+        });
+    }
+
+    function applyBodyMode(){
+        const b=document.body; if(!b) return;
+        if(isEffectiveAdmin()) b.classList.remove('user-mode'); else b.classList.add('user-mode');
+    }
 
     function init() {
         // בדוק אם יש משתמש מחובר
@@ -498,6 +607,7 @@
                 catch(e){ completedTests = new Set(); }
             }
             hideLoginScreen(); refreshTestOrder(); updateTestButtons(); hideUserStatsIfNeeded(); applyBodyMode();
+            updateWelcomeGreeting(); // הצג ברכת שלום אם יש משתמש מחובר
             
             // רענן את המבחנים שהושלמו מהדאטאבייס (למקרה שהשתנו)
             if(!isAdmin && savedUuid){
@@ -554,7 +664,12 @@
         getCurrentUser: () => currentUser,
         getCurrentUserUuid: () => currentUserUuid,
         getCurrentUserRecord: () => currentUserRecord,
-        isAdmin: () => isAdmin,
+        isAdmin: () => isEffectiveAdmin(),
+        hasAdminAccess: () => isAdmin,
+        isPreviewMode: () => isPreviewMode(),
+        getPreviewState: () => Object.assign({}, previewState),
+        enterPreviewMode: (testId, options)=> enterPreviewMode(testId, options || {}),
+        exitPreviewMode,
         markTestCompleted,
         showTestCompleteModal,
         logout,

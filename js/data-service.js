@@ -3,6 +3,14 @@
   const logPrefix = '[exam-data]';
   const NORTH_BUCKET = 'northfind';
   const NORTH_TABLE = 'northfind_maps';
+  
+  // Cache למניעת הורדות כפולות של הגדרות
+  let settingsCache = {
+    data: null,
+    fetchedAt: 0,
+    ttl: 300000 // 5 דקות - לא נוריד שוב אם הורדנו לאחרונה
+  };
+  
   function log(){
     try {
       const args = Array.prototype.slice.call(arguments);
@@ -60,19 +68,42 @@
     return null;
   }
 
-  async function fetchActiveSettings(){
+  async function fetchActiveSettings(options){
+    const opts = options || {};
     if(!isReady()) return null;
+    
+    // בדיקה אם יש cache תקף (אלא אם כן נדרש force)
+    const now = Date.now();
+    if(!opts.force && settingsCache.data && (now - settingsCache.fetchedAt) < settingsCache.ttl){
+      console.log(logPrefix, '📋 משתמש ב-cache של הגדרות (גיל:', Math.round((now - settingsCache.fetchedAt)/1000), 'שניות)');
+      return settingsCache.data;
+    }
+    
     try {
+      console.log(logPrefix, '🔄 מוריד הגדרות מהשרת...');
       const row = await fetchLatestRow();
       if(!row) return null;
       if(row && row.settings_payload && !row.payload){
         row.payload = row.settings_payload;
       }
+      
+      // שמור ב-cache
+      settingsCache.data = row;
+      settingsCache.fetchedAt = now;
+      console.log(logPrefix, '✅ הגדרות נשמרו ב-cache');
+      
       return row;
     } catch(err){
       console.warn(logPrefix, 'fetchActiveSettings failed', err);
       return null;
     }
+  }
+  
+  // פונקציה לניקוי ה-cache (לשימוש כשמנהל שומר הגדרות חדשות)
+  function clearSettingsCache(){
+    settingsCache.data = null;
+    settingsCache.fetchedAt = 0;
+    console.log(logPrefix, '🗑️ cache הגדרות נוקה');
   }
 
   async function saveSettingsBundle(bundle, meta){
@@ -485,6 +516,7 @@
     isReady,
     fetchActiveSettings,
     saveSettingsBundle,
+    clearSettingsCache,
     fetchUserByIdentifier,
     fetchUserByCredentials,
     fetchAdminByIdentifier,

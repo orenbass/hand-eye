@@ -6,8 +6,7 @@
     'E2W': 'ממזרח למערב',
     'W2E': 'ממערב למזרח'
   };
-  const PRACTICE_COUNT = 2;
-  const ANSWER_TIME_SEC = 60;
+  // הערכים הקשיחים הוסרו - עכשיו מגיעים מ-getOrientationConfig
 
   const startBtn = document.getElementById('start-orientation');
   const introView = document.getElementById('orientation-intro');
@@ -95,27 +94,23 @@
   }
 
   function ensureInstructionsOverlay(section){
+    // משתמש במערכת האחידה מ-instructions.js
     if(!section) return null;
-    let overlay = section.querySelector('.legacy-instructions-overlay');
+    let overlay = section.querySelector('.unified-instructions-overlay');
     if(overlay) return overlay;
+    
+    // אם אין overlay אחיד, ניצור אותו דרך הפונקציה הגלובלית
     const instr = section.querySelector('.instructions-view');
     if(!instr) return null;
-    overlay = document.createElement('div');
-    overlay.className = 'legacy-instructions-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;display:none;z-index:1000;background:rgba(0,0,0,0.55);overflow:auto;padding:40px';
-    overlay.innerHTML = '<div class="instructions-box" style="max-width:800px;margin:0 auto;position:relative"><button type="button" class="close-legacy" style="position:absolute;top:12px;left:12px" title="סגור">✕</button>' + instr.innerHTML + '</div>';
-    section.appendChild(overlay);
-    const closeBtn = overlay.querySelector('.close-legacy');
-    if(closeBtn){
-      closeBtn.addEventListener('click', () => {
-        overlay.style.display = 'none';
-      });
+    
+    // הפונקציה הגלובלית תיצור את ה-overlay
+    if(typeof window.openInstructionsOverlay === 'function'){
+      window.openInstructionsOverlay(section.id);
+      window.closeInstructionsOverlay(section.id);
+      return section.querySelector('.unified-instructions-overlay');
     }
-    const overlayStartBtn = overlay.querySelector('.start-test-btn');
-    if(overlayStartBtn){
-      overlayStartBtn.style.display = 'none';
-    }
-    return overlay;
+    
+    return null;
   }
 
   function mountOrientationInstructionsButton(){
@@ -125,13 +120,17 @@
     const btn = slot.querySelector('button');
     if(!btn) return;
     const section = document.getElementById('orientation-screen');
-    const overlay = ensureInstructionsOverlay(section);
-    if(!overlay) return;
-    if(!overlay.style.display){
-      overlay.style.display = 'none';
-    }
+    
     btn.addEventListener('click', () => {
-      overlay.style.display = overlay.style.display === 'block' ? 'none' : 'block';
+      if(typeof window.openInstructionsOverlay === 'function'){
+        // בדיקה אם פתוח או סגור
+        const overlay = section.querySelector('.unified-instructions-overlay');
+        if(overlay && overlay.style.display === 'block'){
+          window.closeInstructionsOverlay('orientation-screen');
+        } else {
+          window.openInstructionsOverlay('orientation-screen');
+        }
+      }
     });
   }
 
@@ -362,6 +361,7 @@
   async function buildQuestionsAsync(){
     const cfg = getConfig();
     const maxExam = Math.max(1, cfg.maxQuestions || 10);
+    const practiceCount = cfg.practiceCount || 2;
     const data = { practice: [], exam: [] };
 
     if(!orientationSets.length){
@@ -373,7 +373,7 @@
         if(cfg.exampleSets && cfg.exampleSets.length > 0){
             practicePool = ordered.filter(s => cfg.exampleSets.includes(s.test_number));
         } else {
-            practicePool = ordered.slice(0, PRACTICE_COUNT);
+            practicePool = ordered.slice(0, practiceCount);
         }
 
         practicePool.forEach(set => {
@@ -394,9 +394,9 @@
       }
     }
 
-    const fallback = buildFallbackQuestionList(maxExam + PRACTICE_COUNT);
-    data.practice = fallback.slice(0, PRACTICE_COUNT);
-    data.exam = fallback.slice(PRACTICE_COUNT, PRACTICE_COUNT + maxExam);
+    const fallback = buildFallbackQuestionList(maxExam + practiceCount);
+    data.practice = fallback.slice(0, practiceCount);
+    data.exam = fallback.slice(practiceCount, practiceCount + maxExam);
     if(!data.exam.length && data.practice.length){
       data.exam = data.practice.slice();
       data.practice = [];
@@ -445,7 +445,8 @@
 
   function startAnswerCountdown(seconds){
     stopAnswerCountdown();
-    const duration = Math.max(1, seconds || ANSWER_TIME_SEC);
+    const cfg = getConfig();
+    const duration = Math.max(1, seconds || cfg.answerTimeSec || 60);
     answerDeadline = Date.now() + duration * 1000;
     updateAnswerCountdown();
     answerTimerTicker = setInterval(() => {
@@ -698,7 +699,8 @@
       showTopBtn.addEventListener('click', () => openTopImageModal(q._topImgEl ? q._topImgEl.src : q.topImage));
     }
     questionStartTime = Date.now();
-    startAnswerCountdown(ANSWER_TIME_SEC);
+    const cfg = getConfig();
+    startAnswerCountdown(cfg.answerTimeSec || 60);
     document.querySelectorAll('.orient-answer-btn').forEach(btn => {
       btn.addEventListener('click', () => handleAnswer(btn.dataset.answer));
       btn.addEventListener('mouseenter', function(){ this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 20px rgba(102,126,234,0.4)'; });
@@ -919,7 +921,19 @@
   }
 
   async function start(){
-    if(startBtn) startBtn.disabled = true;
+    if(startBtn) {
+      startBtn.disabled = true;
+      const originalText = startBtn.textContent;
+      startBtn.textContent = 'טוען הגדרות...';
+      try {
+        if(window.refreshTestSettings) {
+          await window.refreshTestSettings('orientation', { force: true });
+        }
+      } catch(e) {
+        console.warn('[orientation] Failed to refresh settings:', e);
+      }
+      startBtn.textContent = originalText;
+    }
     
     if(!prePracticeShown){
         prePracticeShown = true;

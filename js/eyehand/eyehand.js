@@ -79,15 +79,7 @@ class EyeHandTest {
     const retryButton = document.getElementById('retry-button');
     const newPathButton = document.getElementById('new-path-button');
     if (startButton) {
-      startButton.addEventListener('click', () => {
-        this.reloadConfig();
-        if (this.practiceEnabled && !this.prePracticeShown) {
-          this.prePracticeShown = true;
-          this.showPrePracticeModal(() => this.showTestScreen());
-        } else {
-          this.showTestScreen();
-        }
-      });
+      startButton.addEventListener('click', () => this.handleStartButtonClick(startButton));
     }
     if (retryButton) retryButton.addEventListener('click', () => this.retryTest());
     if (newPathButton) newPathButton.addEventListener('click', () => this.newPathTest());
@@ -96,6 +88,141 @@ class EyeHandTest {
       this.instructionsOverlay.addEventListener('click', (ev) => {
         if (ev.target === this.instructionsOverlay) this.closeInstructionsOverlay();
       });
+    }
+  }
+
+  async handleStartButtonClick(btn) {
+    if (this.busyStarting) return;
+    this.busyStarting = true;
+
+    const originalText = btn ? btn.textContent : 'התחל מבחן';
+    let loadingOverlay = null;
+
+    try {
+      // Show loading state on button
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'טוען הגדרות...';
+      }
+
+      // Show loading overlay after 300ms if still loading
+      const overlayTimer = setTimeout(() => {
+        loadingOverlay = this.showLoadingOverlay('טוען הגדרות עדכניות מהשרת...');
+      }, 300);
+
+      // Fetch test-specific settings from server with timeout
+      if (window.refreshTestSettings) {
+        console.log('[eyehand] 🔄 מוריד הגדרות ספציפיות למבחן תיאום עין-יד...');
+        try {
+          const fetchPromise = window.refreshTestSettings('eyehand', { force: true });
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+          const result = await Promise.race([fetchPromise, timeoutPromise]);
+
+          if (result && result.timeout) {
+            console.warn('[eyehand] ⏱️ Timeout - משתמש בהגדרות מקומיות');
+          } else if (result && result.applied) {
+            console.log('[eyehand] ✅ הגדרות ספציפיות הורדו בהצלחה!', result.payload);
+          } else if (result && result.reason) {
+            console.log('[eyehand] ℹ️ לא נמצאו הגדרות ספציפיות:', result.reason);
+          }
+        } catch (e) {
+          console.warn('[eyehand] ❌ שגיאה בהורדת הגדרות ספציפיות:', e);
+        }
+      } else {
+        console.log('[eyehand] ⚠️ פונקציית refreshTestSettings לא זמינה');
+      }
+
+      clearTimeout(overlayTimer);
+
+      // Reload config and start test
+      console.log('[eyehand] 🔧 טוען קונפיגורציה למבחן...');
+      this.reloadConfig();
+      console.log('[eyehand] ✅ קונפיגורציה נטענה:', {
+        difficulty: this.config?.difficulty,
+        durationMs: this.config?.durationMs || this.testDuration,
+        practiceEnabled: this.practiceEnabled,
+        practiceRuns: this.practiceRunsRequired
+      });
+
+      if (this.practiceEnabled && !this.prePracticeShown) {
+        this.prePracticeShown = true;
+        this.showPrePracticeModal(() => this.showTestScreen());
+      } else {
+        this.showTestScreen();
+      }
+    } catch (err) {
+      console.error('[eyehand] Error starting test', err);
+      this.showTestScreen();
+    } finally {
+      this.busyStarting = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+      if (loadingOverlay) {
+        this.hideLoadingOverlay(loadingOverlay);
+      }
+    }
+  }
+
+  showLoadingOverlay(message) {
+    const overlay = document.createElement('div');
+    overlay.className = 'eyehand-loading-overlay';
+    overlay.innerHTML = `
+      <div class="eyehand-loading-content">
+        <div class="eyehand-spinner"></div>
+        <p>${message || 'טוען...'}</p>
+      </div>
+    `;
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    `;
+    const content = overlay.querySelector('.eyehand-loading-content');
+    if (content) {
+      content.style.cssText = `
+        background: var(--bg-secondary, #1e293b);
+        padding: 32px 48px;
+        border-radius: 16px;
+        text-align: center;
+        color: var(--text-primary, #fff);
+        font-size: 1.1rem;
+      `;
+    }
+    const spinner = overlay.querySelector('.eyehand-spinner');
+    if (spinner) {
+      spinner.style.cssText = `
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(255,255,255,0.2);
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        margin: 0 auto 16px;
+        animation: eyehand-spin 1s linear infinite;
+      `;
+    }
+    // Add spinner animation if not exists
+    if (!document.getElementById('eyehand-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'eyehand-spinner-style';
+      style.textContent = '@keyframes eyehand-spin { to { transform: rotate(360deg); } }';
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  hideLoadingOverlay(overlay) {
+    if (overlay && overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
     }
   }
 
@@ -177,34 +304,31 @@ class EyeHandTest {
   }
 
   prepareInstructionsOverlay() {
-    if (!this.instructionsOverlay || this.instructionsOverlay.dataset.ready === 'yes') return;
-    const src = document.querySelector('#welcome-screen .instructions-box');
-    if (!src) return;
-    this.instructionsOverlay.innerHTML = `
-      <div class="instructions-box" style="max-width:780px;margin:0 auto;position:relative">
-        <button type="button" class="btn btn-secondary close-legacy" style="position:absolute;top:16px;left:16px">✕</button>
-        ${src.innerHTML}
-      </div>`;
-    const closeBtn = this.instructionsOverlay.querySelector('.close-legacy');
-    if (closeBtn) closeBtn.addEventListener('click', () => this.closeInstructionsOverlay());
-    const overlayStartBtn = this.instructionsOverlay.querySelector('.start-test-btn');
-    if (overlayStartBtn) overlayStartBtn.style.display = 'none';
-    this.instructionsOverlay.dataset.ready = 'yes';
+    // משתמש במערכת האחידה מ-instructions.js
+    // לא צריך לעשות כלום כאן - ה-instructions.js מטפל בזה
   }
 
   openInstructionsOverlay() {
-    this.prepareInstructionsOverlay();
-    if (this.instructionsOverlay) this.instructionsOverlay.style.display = 'block';
+    if(typeof window.openInstructionsOverlay === 'function'){
+      window.openInstructionsOverlay('test-screen');
+    }
   }
 
   closeInstructionsOverlay() {
-    if (this.instructionsOverlay) this.instructionsOverlay.style.display = 'none';
+    if(typeof window.closeInstructionsOverlay === 'function'){
+      window.closeInstructionsOverlay('test-screen');
+    }
   }
 
   toggleInstructionsOverlay() {
-    if (!this.instructionsOverlay) return;
-    if (this.instructionsOverlay.style.display === 'block') this.closeInstructionsOverlay();
-    else this.openInstructionsOverlay();
+    const section = document.getElementById('test-screen');
+    if(!section) return;
+    const overlay = section.querySelector('.unified-instructions-overlay');
+    if(overlay && overlay.style.display === 'block'){
+      this.closeInstructionsOverlay();
+    } else {
+      this.openInstructionsOverlay();
+    }
   }
 
   showTestScreen() {

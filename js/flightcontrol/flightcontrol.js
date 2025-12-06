@@ -1,6 +1,6 @@
 import { getFlightControlConfig } from './flightcontrol.config.js';
 import { computeFlightControlRaw, scaleFlightControl } from './flightcontrol.scoring.js';
-import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
+import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.utils.js';
 
 (function(){
   const btn=document.getElementById('start-flightcontrol');
@@ -75,7 +75,7 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
           בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
 ודא שאתה מוכן לפני המעבר למבחן.
         </p>
-        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+        <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
     `;
     modal.style.display = 'flex';
     
@@ -251,6 +251,11 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   function startRun(targetMode='real'){
     if(running) return;
     cfg = getFlightControlConfig();
+    console.log('[flightcontrol] startRun - mode:', targetMode, 'cfg:', JSON.stringify(cfg));
+    
+    // איפוס מצב הרעש למבחן חדש
+    resetNoise();
+    
     if (window.enterFullscreenMode) window.enterFullscreenMode();
     resize();
     requestAnimationFrame(()=>resize());
@@ -271,7 +276,22 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
   }
 
   function resize(){
-    const size = Math.floor(Math.min(window.innerWidth * 0.9, window.innerHeight * 0.8));
+    // חישוב גובה זמין בין הבאנרים למעלה לפוטר למטה
+    const headerRow = document.querySelector('#flightcontrol-screen .orientation-header-row');
+    const footerRow = document.querySelector('#flightcontrol-screen .orientation-footer-row');
+    
+    // גובה האלמנטים העליונים והתחתונים
+    const headerHeight = headerRow ? headerRow.offsetHeight : 80;
+    const footerHeight = footerRow ? footerRow.offsetHeight : 100;
+    const padding = 40; // מרווח בטיחות
+    
+    // הגובה הזמין לקאנבס
+    const availableHeight = window.innerHeight - headerHeight - footerHeight - padding;
+    const availableWidth = window.innerWidth - 40; // מרווח מהצדדים
+    
+    // הקאנבס יהיה ריבועי - לפי המימד הקטן יותר
+    const size = Math.floor(Math.min(availableWidth, availableHeight));
+    
     canvas.width = size;
     canvas.height = size;
     canvas.style.width = size + 'px';
@@ -373,7 +393,37 @@ import { fmtTime, maxRadius, noiseValue } from './flightcontrol.utils.js';
     }
   });
 
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'טוען הגדרות...';
+    
+    // Fetch test-specific settings from server
+    if(window.refreshTestSettings){
+        try {
+            console.log('[flightcontrol] 🔄 מוריד הגדרות ספציפיות למבחן בקרת טיסה...');
+            const fetchPromise = window.refreshTestSettings('flightcontrol', { force: true });
+            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+            const result = await Promise.race([fetchPromise, timeoutPromise]);
+            if(result && result.applied){
+                console.log('[flightcontrol] ✅ הגדרות ספציפיות הורדו בהצלחה', result.payload);
+            } else if(result && result.timeout){
+                console.warn('[flightcontrol] ⏱️ Timeout - משתמש בהגדרות מקומיות');
+            } else if(result && result.reason){
+                console.log('[flightcontrol] ℹ️ לא נמצאו הגדרות ספציפיות:', result.reason);
+            }
+        } catch(e){
+            console.warn('[flightcontrol] ❌ שגיאה בהורדת הגדרות ספציפיות', e);
+        }
+    } else {
+        console.log('[flightcontrol] ⚠️ פונקציית refreshTestSettings לא זמינה');
+    }
+    
+    // Restore button
+    btn.disabled = false;
+    btn.textContent = originalText;
+    
     if(!prePracticeShown){
         prePracticeShown=true;
         showPrePracticeModal(startPractice);

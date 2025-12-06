@@ -97,8 +97,8 @@ import { computeTrackingScores } from './tracking.scoring.js';
     `;
             modal.style.display = 'flex';
             
-            const btn = contentBox.querySelector('[data-action="start-real"]');
-            btn.onclick = () => {
+            const btn = contentBox.querySelector('[data-action="confirm"]');
+            if(btn) btn.onclick = () => {
                 const countdownSec = this.config && this.config.examCountdownSec ? this.config.examCountdownSec : 0;
                 if(countdownSec > 0){
                     let remaining = countdownSec;
@@ -132,6 +132,7 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.radiusFactor = cfg.radiusFactor;
             this.numberTimeout = cfg.numberTimeoutSec * 1000;
             this.target.speed = this.speed;
+            console.log('[tracking] reloadConfig:', { mode: currentMode, duration: this.duration/1000, speed: this.speed });
         }
         createNumberBox(){
             const container = this.canvas && this.canvas.parentElement;
@@ -148,7 +149,7 @@ import { computeTrackingScores } from './tracking.scoring.js';
             if(this.lastKeyFeedback && performance.now()-this.lastKeyFeedback.time<400){ const color=this.lastKeyFeedback.correct? '#10b981':'#ef4444'; this.numberBoxEl.style.background=color; setTimeout(()=>{ if(this.running && this.numberBoxEl) this.numberBoxEl.style.background='linear-gradient(135deg,#667eea 0%,#764ba2 100%)'; },300); }
         }
         handleNumberKey(key){ if(!this.running) return; const pressed=parseInt(key); if(isNaN(pressed)||pressed<1||pressed>4) return; const now=performance.now(); const rt=now-this.numberStartTime; if(pressed===this.currentNumber){ this.correctClicks++; this.numberHistory.push({number:this.currentNumber,correct:true,time:rt}); this.lastKeyFeedback={correct:true,time:now}; this.nextNumber(); } else { this.wrongClicks++; this.numberHistory.push({number:this.currentNumber,correct:false,time:rt}); this.lastKeyFeedback={correct:false,time:now}; } this.updateNumberDisplay(); }
-        nextNumber(){ let next; do{ next=Math.floor(Math.random()*4)+1; }while(next===this.previousNumber); this.previousNumber=this.currentNumber; this.currentNumber=next; this.numberStartTime=performance.now(); this.updateNumberDisplay(); }
+        nextNumber(){ let next; do{ next=Math.floor(Math.random()*4)+1; }while(next===this.currentNumber); this.previousNumber=this.currentNumber; this.currentNumber=next; this.numberStartTime=performance.now(); this.updateNumberDisplay(); }
         checkNumberTimeout(){ if(!this.running) return; const elapsed=performance.now()-this.numberStartTime; if(elapsed>=this.numberTimeout){ this.missedNumbers++; this.numberHistory.push({number:this.currentNumber,correct:false,time:this.numberTimeout,missed:true}); this.nextNumber(); } }
         initTargetVelocity(){ const v=randomAngleVelocity(this.speed); this.target.vx=v.vx; this.target.vy=v.vy; }
         resize(){ 
@@ -174,7 +175,40 @@ import { computeTrackingScores } from './tracking.scoring.js';
         }
         bind(){
             const btn=document.getElementById('start-tracking-button');
-            if(btn) btn.addEventListener('click',()=> {
+            if(btn) btn.addEventListener('click', async ()=> {
+                // Show loading state
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'טוען הגדרות...';
+                
+                // Fetch test-specific settings from server
+                if(window.refreshTestSettings){
+                    try {
+                        console.log('[tracking] 🔄 מוריד הגדרות ספציפיות למבחן מעקב...');
+                        const fetchPromise = window.refreshTestSettings('tracking', { force: true });
+                        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+                        const result = await Promise.race([fetchPromise, timeoutPromise]);
+                        if(result && result.applied){
+                            console.log('[tracking] ✅ הגדרות ספציפיות הורדו בהצלחה', result.payload);
+                        } else if(result && result.timeout){
+                            console.warn('[tracking] ⏱️ Timeout - משתמש בהגדרות מקומיות');
+                        } else if(result && result.reason){
+                            console.log('[tracking] ℹ️ לא נמצאו הגדרות ספציפיות:', result.reason);
+                        }
+                    } catch(e){
+                        console.warn('[tracking] ❌ שגיאה בהורדת הגדרות ספציפיות', e);
+                    }
+                } else {
+                    console.log('[tracking] ⚠️ פונקציית refreshTestSettings לא זמינה');
+                }
+                
+                // Restore button
+                btn.disabled = false;
+                btn.textContent = originalText;
+                
+                // Reload config after fetching from server
+                this.reloadConfig();
+                
                 if(!this.prePracticeShown){
                     this.prePracticeShown=true;
                     this.showPrePracticeModal(()=>this.startPractice());
@@ -366,7 +400,8 @@ import { computeTrackingScores } from './tracking.scoring.js';
             this.target.x+=this.target.vx*dt; 
             this.target.y+=this.target.vy*dt; 
             if(this.target.x<this.target.r || this.target.x>this.canvas.width-this.target.r){ this.target.vx*=-1; this.target.x=clamp(this.target.x, this.target.r, this.canvas.width-this.target.r); } 
-            if(this.target.y<this.target.r || this.target.y>this.canvas.height-this.target.r){ this.target.vy*=-1; this.target.y=clamp(this.target.y, this.target.r, this.canvas.height-this.target.r); } 
+            if(this.target.y<this.target.r || this.target.y>this.canvas.height-this.target.r){ this.target.vy*=-1; this.target.y=clamp(this.target.y, this.target.r, this.canvas.height-this.target.r); }
+            
             normalizeVelocity(this.target, this.speed); 
             this.draw(); 
             if(this.lastInside) this.inTime+=dt; 

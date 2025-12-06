@@ -32,6 +32,9 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.lastEl=document.getElementById('reaction-last');
             this.avgEl=document.getElementById('reaction-avg');
             this.stdEl=document.getElementById('reaction-std');
+            this.mistakesEl=document.getElementById('reaction-mistakes');
+            this.missedEl=document.getElementById('reaction-missed');
+            this.timerEl=document.getElementById('reaction-timer');
             this.scoreBox=document.getElementById('reaction-score-box');
             this.scoreValue=document.getElementById('reaction-score-value');
             this.countdownEl=document.getElementById('reaction-countdown');
@@ -49,7 +52,37 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
         bind(){
             const startBtn=document.getElementById('start-reaction-button');
             if(startBtn) {
-                startBtn.addEventListener('click',()=> {
+                startBtn.addEventListener('click', async ()=> {
+                    // Show loading state
+                    const originalText = startBtn.textContent;
+                    startBtn.disabled = true;
+                    startBtn.textContent = 'טוען הגדרות...';
+                    
+                    // Fetch test-specific settings from server
+                    if(window.refreshTestSettings){
+                        try {
+                            console.log('[reaction] 🔄 מוריד הגדרות ספציפיות למבחן זמן תגובה...');
+                            const fetchPromise = window.refreshTestSettings('reaction', { force: true });
+                            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+                            const result = await Promise.race([fetchPromise, timeoutPromise]);
+                            if(result && result.applied){
+                                console.log('[reaction] ✅ הגדרות ספציפיות הורדו בהצלחה', result.payload);
+                            } else if(result && result.timeout){
+                                console.warn('[reaction] ⏱️ Timeout - משתמש בהגדרות מקומיות');
+                            } else if(result && result.reason){
+                                console.log('[reaction] ℹ️ לא נמצאו הגדרות ספציפיות:', result.reason);
+                            }
+                        } catch(e){
+                            console.warn('[reaction] ❌ שגיאה בהורדת הגדרות ספציפיות', e);
+                        }
+                    } else {
+                        console.log('[reaction] ⚠️ פונקציית refreshTestSettings לא זמינה');
+                    }
+                    
+                    // Restore button
+                    startBtn.disabled = false;
+                    startBtn.textContent = originalText;
+                    
                     // Load config to check practiceEnabled
                     const cfg = getReactionConfig();
                     const practiceEnabled = cfg.practiceEnabled !== false;
@@ -81,6 +114,9 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.lastEl=document.getElementById('reaction-last');
             this.avgEl=document.getElementById('reaction-avg');
             this.stdEl=document.getElementById('reaction-std');
+            this.mistakesEl=document.getElementById('reaction-mistakes');
+            this.missedEl=document.getElementById('reaction-missed');
+            this.timerEl=document.getElementById('reaction-timer');
             this.scoreBox=document.getElementById('reaction-score-box');
             this.scoreValue=document.getElementById('reaction-score-value');
             this.countdownEl=document.getElementById('reaction-countdown');
@@ -351,7 +387,7 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
                 this.difficulty = cfg.difficulty;
                 this.shapes = SHAPES_BY_DIFF[this.difficulty];
                 this.shapeDisplaySec = cfg.shapeDisplaySec;
-                this.durationSec = cfg.durationSec;
+                // לא לדרוס durationSec כאן - זה נקבע ב-startSeries לפי mode
                 this.targetGoal = cfg.targetGoal;
             }
             this.targetCount = 0;
@@ -359,6 +395,8 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             this.patternLength = Math.max(1, (this.targetGoal*2) - 1);
             this.gapRemaining = Math.floor(Math.random()*3)+1;
             this.firstShown = false;
+            this.consecutiveTargets = 0; // מונה ריבועים ירוקים רצופים
+            this.stimulusCount = 0; // מונה כל הצורות שהוצגו
             this.times = [];
             this.mistakes = 0;
             this.missedTargets = 0;
@@ -416,12 +454,20 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             if (window.enterFullscreenMode) window.enterFullscreenMode();
             // Load fresh config on each start (dynamic admin changes)
             const cfg = getReactionConfig();
+            console.log('[reaction] startSeries mode:', mode, 'cfg:', JSON.stringify(cfg));
             this.difficulty = cfg.difficulty;
             this.shapes = SHAPES_BY_DIFF[this.difficulty];
             this.shapeDisplaySec = cfg.shapeDisplaySec;
-            this.durationSec = (mode === 'practice' && cfg.practiceDurationMs) 
-                ? cfg.practiceDurationMs / 1000 
-                : cfg.durationSec;
+            // קביעת זמן לפי מצב - תרגול או מבחן אמיתי
+            if(mode === 'practice'){
+                // בתרגול: השתמש ב-practiceDurationMs אם קיים, אחרת fallback ל-20 שניות
+                this.durationSec = (cfg.practiceDurationMs && cfg.practiceDurationMs > 0) 
+                    ? cfg.practiceDurationMs / 1000 
+                    : 20;
+            } else {
+                this.durationSec = cfg.durationSec;
+            }
+            console.log('[reaction] durationSec set to:', this.durationSec, 'for mode:', mode);
             this.targetGoal = cfg.targetGoal;
             this.resetRunState(cfg);
             this.activeMode = mode;
@@ -491,26 +537,109 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
             }
 
             if(this.targetActive && !this.targetClicked && !initial){ this.missedTargets++; }
-            if(elapsed >= this.durationSec && this.targetCount >= this.targetGoal){ this.finish(); return; }
+            // סיום: אם הזמן נגמר או הגענו ליעד
+            if(elapsed >= this.durationSec || this.targetCount >= this.targetGoal){ this.finish(); return; }
+            
+            this.stimulusCount++;
             let shape, color, isTarget=false;
+            
             if(this.targetCount < this.targetGoal){
-                if(this.gapRemaining<=0){
-                    shape='square'; color='#00b341'; isTarget=true;
-                    if(!this.firstShown && this.targetCount===0){ isTarget=false; color=this.safeColor(false); this.gapRemaining=Math.floor(Math.random()*3)+1; }
-                    if(isTarget){
-                        this.targetCount++; this.currentStimStart=now;
-                        this.gapRemaining = Math.floor(Math.random()*3)+1;
+                const isHardMode = this.difficulty === 'hard';
+                
+                // חישוב פיזור ריבועים ירוקים לאורך כל המבחן
+                const totalStimuli = Math.floor(this.durationSec / this.shapeDisplaySec);
+                const remainingTargets = this.targetGoal - this.targetCount;
+                const remainingStimuli = Math.max(1, totalStimuli - this.stimulusCount);
+                
+                // הסתברות דינמית - מתאימה את עצמה כדי לפזר את המטרות
+                const baseChance = remainingTargets / remainingStimuli;
+                
+                // בדיקה אם חייבים להציג מטרה (אחרת לא נספיק)
+                const mustShowTarget = remainingTargets >= remainingStimuli;
+                
+                // בדיקה אם אסור להציג מטרה (יותר מ-2 רצופים)
+                const tooManyConsecutive = this.consecutiveTargets >= 2;
+                
+                // הצורה הראשונה לעולם לא מטרה
+                if(!this.firstShown && this.targetCount === 0){
+                    shape = this.shapes[Math.floor(Math.random() * this.shapes.length)];
+                    color = this.safeColor(false);
+                    this.firstShown = true;
+                    this.consecutiveTargets = 0;
+                } 
+                // אם יש כבר 2 רצופים - חייבים הפסקה
+                else if(tooManyConsecutive){
+                    if(isHardMode && Math.random() < 0.5){
+                        // במצב קשה: 50% סיכוי לצורה ירוקה שאינה ריבוע (מבלבל)
+                        const nonSquareShapes = this.shapes.filter(s => s !== 'square');
+                        shape = nonSquareShapes.length > 0 
+                            ? nonSquareShapes[Math.floor(Math.random() * nonSquareShapes.length)]
+                            : 'circle';
+                        color = '#00b341'; // ירוק אבל לא ריבוע!
+                    } else {
+                        shape = this.shapes[Math.floor(Math.random() * this.shapes.length)];
+                        if(shape === 'square'){ 
+                            color = this.safeColor(false); 
+                        } else { 
+                            color = this.safeColor(true); 
+                        }
                     }
-                } else {
-                    shape = this.shapes[Math.floor(Math.random()*this.shapes.length)];
-                    if(shape==='square'){ color=this.safeColor(false); } else { color=this.safeColor(true); }
-                    if(shape==='square' && (color==='#00b341' || color==='green')){ color=this.safeColor(false); }
-                    this.gapRemaining--;
+                    this.consecutiveTargets = 0;
+                }
+                // אם חייבים להציג מטרה כדי להספיק
+                else if(mustShowTarget){
+                    shape = 'square'; 
+                    color = '#00b341'; 
+                    isTarget = true;
+                    this.targetCount++; 
+                    this.currentStimStart = now;
+                    this.consecutiveTargets++;
+                }
+                // החלטה רגילה לפי הסתברות
+                else {
+                    // התאמת הסתברות עם קצת אקראיות
+                    const adjustedChance = Math.min(0.6, Math.max(0.15, baseChance + (Math.random() - 0.5) * 0.1));
+                    
+                    if(Math.random() < adjustedChance){
+                        // מטרה - ריבוע ירוק
+                        shape = 'square'; 
+                        color = '#00b341'; 
+                        isTarget = true;
+                        this.targetCount++; 
+                        this.currentStimStart = now;
+                        this.consecutiveTargets++;
+                    } else {
+                        // לא מטרה
+                        if(isHardMode && Math.random() < 0.4){
+                            // במצב קשה: 40% סיכוי לצורה ירוקה שאינה ריבוע
+                            const nonSquareShapes = this.shapes.filter(s => s !== 'square');
+                            shape = nonSquareShapes.length > 0 
+                                ? nonSquareShapes[Math.floor(Math.random() * nonSquareShapes.length)]
+                                : 'circle';
+                            color = '#00b341'; // ירוק אבל לא ריבוע!
+                        } else {
+                            shape = this.shapes[Math.floor(Math.random() * this.shapes.length)];
+                            if(shape === 'square'){ 
+                                color = this.safeColor(false); 
+                            } else { 
+                                color = this.safeColor(true); 
+                            }
+                        }
+                        this.consecutiveTargets = 0;
+                    }
                 }
             } else {
-                shape = this.shapes[Math.floor(Math.random()*this.shapes.length)];
-                if(shape==='square'){ color=this.safeColor(false); } else { color=this.safeColor(true); }
-                if(shape==='square' && (color==='#00b341' || color==='green')){ color=this.safeColor(false); }
+                // כבר הגענו ליעד - רק צורות שאינן מטרות
+                shape = this.shapes[Math.floor(Math.random() * this.shapes.length)];
+                if(shape === 'square'){ 
+                    color = this.safeColor(false); 
+                } else { 
+                    color = this.safeColor(true); 
+                }
+                if(shape === 'square' && (color === '#00b341' || color === 'green')){ 
+                    color = this.safeColor(false); 
+                }
+                this.consecutiveTargets = 0;
             }
             this.firstShown=true;
             this.targetActive = isTarget;
@@ -586,13 +715,36 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
         }
         handleSpacePress(){
             if(this.state!=='run') return;
+            const isCorrect = this.targetActive && !this.targetClicked;
+            
             if(this.targetActive){
                 if(!this.targetClicked){
                     const rt = performance.now()-this.currentStimStart; this.times.push(rt); this.targetClicked=true;
                 } else { this.mistakes++; }
             } else { this.mistakes++; }
+            
+            // חיווי ויזואלי רק במצב תרגול
+            if(this.activeMode === 'practice' && this.area){
+                this.flashBorder(isCorrect ? '#00b341' : '#ef4444');
+            }
+            
             this.updateStats();
         }
+        
+        // הבהוב מסגרת לחיווי
+        flashBorder(color){
+            if(!this.area) return;
+            const originalBorder = this.area.style.border;
+            this.area.style.border = `4px solid ${color}`;
+            this.area.style.boxShadow = `0 0 20px ${color}, inset 0 0 10px ${color}40`;
+            setTimeout(() => {
+                if(this.area){
+                    this.area.style.border = originalBorder || '3px solid var(--accent-primary)';
+                    this.area.style.boxShadow = '';
+                }
+            }, 300);
+        }
+        
         finish(){
             const wasPractice = this.activeMode==='practice';
             this.state='done';
@@ -619,10 +771,20 @@ import { computeReactionRawScore, scaleReactionScore } from './reaction.scoring.
         updateStats(){
             if(!this.isAdmin()) return;
             if(this.attemptEl) this.attemptEl.textContent=this.targetCount+'/'+this.targetGoal;
-            if(this.lastEl) this.lastEl.textContent=this.times.length?this.times[this.times.length-1].toFixed(0):'-';
+            if(this.mistakesEl) this.mistakesEl.textContent=this.mistakes;
+            if(this.missedEl) this.missedEl.textContent=this.missedTargets;
+            if(this.lastEl) this.lastEl.textContent=this.times.length?this.times[this.times.length-1].toFixed(0)+'ms':'-';
             const avg=mean(this.times); const sd=stddev(this.times);
-            if(this.avgEl) this.avgEl.textContent=this.times.length?avg.toFixed(0):'-';
-            if(this.stdEl) this.stdEl.textContent=this.times.length?sd.toFixed(0):'-';
+            if(this.avgEl) this.avgEl.textContent=this.times.length?avg.toFixed(0)+'ms':'-';
+            if(this.stdEl) this.stdEl.textContent=this.times.length?sd.toFixed(0)+'ms':'-';
+            // עדכון זמן
+            if(this.timerEl && this.state === 'run'){
+                const elapsed = (performance.now() - this.startTimeMs) / 1000;
+                const remaining = Math.max(0, this.durationSec - elapsed);
+                const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+                const s = Math.floor(remaining % 60).toString().padStart(2, '0');
+                this.timerEl.textContent = `${m}:${s}`;
+            }
         }
     }
     document.addEventListener('DOMContentLoaded',()=>{ if(window.testsCore) window.testsCore.registerTest('reaction',{title:'זמן תגובה'}); window.reactionTest=new ReactionTest(); });

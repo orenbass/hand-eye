@@ -16,6 +16,7 @@
 
   function completeTest(id, raw, scaled, extra){
     const authApi = window.testAuth || null;
+    const previewModeActive = authApi && typeof authApi.isPreviewMode === 'function' ? authApi.isPreviewMode() : false;
     const user = authApi && typeof authApi.getCurrentUser==='function' ? authApi.getCurrentUser() : null;
     const userUuid = authApi && typeof authApi.getCurrentUserUuid==='function' ? authApi.getCurrentUserUuid() : null;
     const rec = { id, raw:+raw||0, scaled:+scaled||0, extra: extra||{}, user, userUuid, ts: Date.now() };
@@ -24,7 +25,7 @@
     try{ localStorage.setItem('testResults', JSON.stringify(results)); }catch(e){}
     
     // שמור את התוצאה בדאטה בייס
-    if(userUuid && window.examData && typeof window.examData.saveTestResult === 'function'){
+    if(userUuid && !previewModeActive && window.examData && typeof window.examData.saveTestResult === 'function'){
       window.examData.saveTestResult(userUuid, id, +raw||0, +scaled||0, extra||{})
         .then(()=>{
           console.log('[tests-core] Test result saved to database:', id);
@@ -58,7 +59,7 @@
     }
     
     // Chain to auth module for navigation unlock
-    if(window.testAuth && typeof window.testAuth.markTestCompleted==='function'){
+    if(!previewModeActive && window.testAuth && typeof window.testAuth.markTestCompleted==='function'){
       window.testAuth.markTestCompleted(id);
     }
     emit('test-completed', rec);

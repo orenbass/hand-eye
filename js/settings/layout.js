@@ -258,60 +258,59 @@ export function renderAdminLayout(container){
           </div>
           <div class="settings-section section-northfind" data-tab-section="northfind" style="display:none">
             <h3>מבחן מציאת הצפון</h3>
+            
+            <h4 style="margin-bottom:16px">הגדרות כלליות</h4>
             <div class="form-grid">
-              <div class="form-group">
-                <label for="northfindSeconds">משך המבחן (שניות)</label>
-                <input id="northfindSeconds" type="number" min="5" max="600" value="45">
-                <span class="form-hint">זמן כולל למבחן (כל הניסיונות)</span>
-              </div>
               <div class="form-group">
                 <label for="northfindDifficulty">רמת קושי</label>
                 <select id="northfindDifficulty">
-                  <option>קל</option>
-                  <option selected>בינוני</option>
-                  <option>קשה</option>
+                  <option value="קל">קל</option>
+                  <option value="בינוני" selected>בינוני</option>
+                  <option value="קשה">קשה</option>
                 </select>
-                <span class="form-hint">משפיע על מהירות הסיבוב</span>
+                <span class="form-hint">קל: מעט אלמנטים, סיבוב איטי | קשה: הרבה אלמנטים, סיבוב מהיר</span>
+              </div>
+            </div>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות תרגול</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="northfindPracticeRuns">כמות ניסיונות לתרגול</label>
+                <input id="northfindPracticeRuns" type="number" min="1" max="10" value="1">
+                <span class="form-hint">מספר הסבבים בשלב התרגול</span>
               </div>
               <div class="form-group">
                 <label for="northfindExamCountdownSec">זמן המתנה למבחן (שניות)</label>
-                <input id="northfindExamCountdownSec" type="number" min="3" max="60" value="10">
-                <span class="form-hint">ספירה לאחור לפני תחילת המבחן</span>
-              </div>
-              <div class="form-group">
-                <label for="northfindPracticeSeconds">זמן תרגול (שניות)</label>
-                <input id="northfindPracticeSeconds" type="number" min="5" max="300" value="30">
-                <span class="form-hint">משך שלב התרגול</span>
-              </div>
-              <div class="form-group">
-                <label for="northfindPracticeRuns">מספר ריצות תרגול</label>
-                <input id="northfindPracticeRuns" type="number" min="0" max="10" value="1">
-                <span class="form-hint">כמה פעמים ניתן לתרגל</span>
+                <input id="northfindExamCountdownSec" type="number" min="0" max="60" value="5">
+                <span class="form-hint">ספירה לאחור מסיום התרגול ועד התחלת המבחן</span>
               </div>
             </div>
-            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות מפורטות</h4>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות מבחן</h4>
             <div class="form-grid">
               <div class="form-group">
-                <label for="northTrials">מספר ניסיונות</label>
-                <input id="northTrials" type="number" min="1" max="20" value="5">
-                <span class="form-hint">מספר הסיבובים במבחן</span>
+                <label for="northfindTrials">כמות ניסיונות במבחן</label>
+                <input id="northfindTrials" type="number" min="1" max="20" value="5">
+                <span class="form-hint">מספר הסבבים במבחן האמיתי</span>
               </div>
               <div class="form-group">
-                <label for="northShowNorth">זמן הצגת צפון (שניות)</label>
-                <input id="northShowNorth" type="number" min="1" max="10" value="3">
-                <span class="form-hint">כמה זמן להציג את חץ הצפון</span>
+                <label for="northfindLearnSec">זמן צפיה בתמונה (שניות)</label>
+                <input id="northfindLearnSec" type="number" min="1" max="30" value="10">
+                <span class="form-hint">כמה זמן להציג את חץ הצפון על המפה</span>
               </div>
               <div class="form-group">
-                <label for="northSpin">משך סיבוב (שניות)</label>
-                <input id="northSpin" type="number" min="3" max="30" value="6">
-                <span class="form-hint">כמה זמן המפה מסתובבת</span>
+                <label for="northfindSpinSec">זמן סיבוב התמונה (שניות)</label>
+                <input id="northfindSpinSec" type="number" min="2" max="30" value="6">
+                <span class="form-hint">כמה זמן המפה מסתובבת (רמת קושי משפיעה על המהירות)</span>
               </div>
               <div class="form-group">
-                <label for="northAnswer">זמן תגובה (שניות)</label>
-                <input id="northAnswer" type="number" min="3" max="60" value="10">
+                <label for="northfindAnswerSec">זמן מענה לתשובה (שניות)</label>
+                <input id="northfindAnswerSec" type="number" min="3" max="60" value="10">
                 <span class="form-hint">זמן לבחירת מיקום הצפון</span>
               </div>
             </div>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">תמונות מפה</h4>
             <div class="north-upload-card">
               <div class="north-upload-actions">
                 <button id="northImagesUploadBtn" type="button" class="btn btn-secondary" style="padding:10px 18px;border-radius:10px;">⬆ העלה מפות</button>

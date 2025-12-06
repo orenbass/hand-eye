@@ -35,6 +35,10 @@
     <div id="general-intro-screen" class="login-overlay" style="display:none; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
         <div class="login-container" style="max-width: 800px;">
             <div class="login-box" style="text-align: right; padding: 50px; max-width: 100%;">
+                <div id="intro-welcome-greeting" style="text-align:center;margin-bottom:24px;padding:18px;background:linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2));border-radius:16px;border:1px solid rgba(99,102,241,0.4);display:none;">
+                    <span style="font-size:2rem;">👋</span>
+                    <h2 style="margin:10px 0 0;font-size:1.6rem;color:#3b82f6;font-weight:700;">ברוך הבא, <span id="intro-user-name"></span></h2>
+                </div>
                 <h2 style="text-align: center; color: #3b82f6; margin-bottom: 30px; font-size: 2.2rem;">מבחנים ליחידות מיוחדות חת"מ</h2>
                 
                 <div style="font-size: 1.15rem; line-height: 1.8; color: #1e293b;">
@@ -118,6 +122,10 @@
             <section id="welcome-screen" class="screen">
                 <div class="instructions-view">
                     <div class="instructions-box">
+                        <div id="welcome-greeting" style="text-align:center;margin-bottom:20px;padding:16px;background:linear-gradient(135deg,rgba(59,130,246,0.15),rgba(139,92,246,0.15));border-radius:14px;border:1px solid rgba(99,102,241,0.3);display:none;">
+                            <span style="font-size:1.5rem;">👋</span>
+                            <h2 style="margin:8px 0 0;font-size:1.4rem;color:#e2e8f0;font-weight:600;">ברוך הבא, <span id="welcome-user-name"></span></h2>
+                        </div>
                         <h3>מבחן טיול</h3>
                         <ul>
                             <li>לחץ לחיצה בקליק שמאלי של העכבר- על הנקודה הירוקה בצד שמאל של המסך ואל תשחרר את הלחיצה בקליק של העבר.</li>
@@ -136,7 +144,7 @@
                     <div id="eyehand-shell" class="orientation-layout eyehand-layout" data-stage="practice">
                         <div class="orientation-header-row eyehand-header">
                             <div class="orientation-header-instructions">
-                                <button type="button" id="eyehand-instructions-toggle" class="instructions-toggle-btn hud-instructions-btn">📖 הוראות</button>
+                                <button type="button" id="eyehand-instructions-toggle" class="instructions-toggle-btn hud-instructions-btn" data-screen="test-screen">📖 הוראות</button>
                             </div>
                             <div class="orientation-header-huds">
                                 <div id="eyehand-practice-slot" class="orientation-header-slot orientation-header-slot-practice"></div>
@@ -182,7 +190,6 @@
                         </div>
                     </div>
                 </div>
-                <div id="eyehand-instructions-overlay" class="legacy-instructions-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;padding:40px;overflow:auto;"></div>
             </section>
 
             <!-- Reaction Test Screen -->
@@ -230,8 +237,20 @@
                                 </div>
                                 <div id="reaction-stats" class="test-stats" style="display:none">
                                     <div class="stat-row">
+                                        <span>זמן:</span>
+                                        <span id="reaction-timer">-</span>
+                                    </div>
+                                    <div class="stat-row">
                                         <span>ניסיון:</span>
                                         <span id="reaction-attempt">0/8</span>
+                                    </div>
+                                    <div class="stat-row">
+                                        <span>טעויות:</span>
+                                        <span id="reaction-mistakes">0</span>
+                                    </div>
+                                    <div class="stat-row">
+                                        <span>החמצות:</span>
+                                        <span id="reaction-missed">0</span>
                                     </div>
                                     <div class="stat-row">
                                         <span>זמן אחרון:</span>
@@ -328,12 +347,12 @@
                     <div class="instructions-box">
                         <h3>מבחן מולטיטסקינג</h3>
                         <ul>
-                            <li>התחל בתרגול קצר ללא ניקוד – הכיר את תנועת העיגול ואת קצב המספרים</li>
-                            <li><strong>מעקב:</strong> שמור את סמן העכבר בתוך העיגול הנע לאורך כל הזמן</li>
-                            <li><strong>הקלדת מספרים:</strong> בצד יופיעו מספרים 1-4 בסדר אקראי</li>
-                            <li><strong>הקלד את המספר המוצג</strong> בתוך שתי שניות – מספר חדש יוצג מיד אחרי ההקלדה או בתום הזמן</li>
-                            <li>כשתרגיש מוכן, לחץ על "סיימתי תרגול – להתחיל מבחן אמיתי" וימתין לספירה לאחור של 10 שניות</li>
-                            <li>מטרתך במבחן האמיתי: להישאר בתוך העיגול ולהקליד במדויק את כל המספרים</li>
+                        <ul>
+                            <li> שמור את סמן העכבר בתוך העיגול הנע לאורך כל זמן המבחן.</li>
+                            <li> בצד המסך יופיעו מספרים בין 1 ל-4 בסדר אקראי.</li>
+                            <li> בכל פעם שמופיע מספר, הקלד מיד את הספרה התואמת במקלדת.</li>
+                            <li> ודא שאתה גם שומר את הסמן במרכז העיגול וגם מקליד את המספרים שמופיעים בעת הופעתם.</li>
+                        </ul>
                         </ul>
                         <button id="start-tracking-button" class="btn btn-primary start-test-btn">התחל תרגול</button>
                     </div>
@@ -416,8 +435,8 @@
                         <div class="orientation-main-row">
                             <div class="orientation-main-panel northfind-main-panel">
                                 <div class="test-area">
-                                    <div class="unified-canvas-container">
-                                        <canvas id="northfind-canvas" class="unified-canvas"></canvas>
+                                    <div class="unified-canvas-container" style="background:transparent !important;box-shadow:none !important;border:none !important;">
+                                        <canvas id="northfind-canvas" class="unified-canvas" style="background:transparent !important;"></canvas>
                                     </div>
                                 </div>
                             </div>
@@ -449,11 +468,9 @@
                     <div class="instructions-box">
                         <h3>מבחן בקרת טיסה</h3>
                         <ul>
-                            <li> שמור את סמן העכבר בתוך העיגול הנע לאורך כל זמן המבחן.</li>
-                            <li> בצד המסך יופיעו מספרים בין 1 ל-4 בסדר אקראי.</li>
-                            <li> בכל פעם שמופיע מספר, הקלד מיד את הספרה התואמת במקלדת.</li>
-                            <li> ודא שאתה גם שומר את הסמן במרכז העיגול וגם מקליד את המספרים שמופיעים בעת הופעתם.</li>
-
+                            <li>השתמש במקשי החצים כדי להזיז את סמן הטיסה (העיגול) ולשמור אותו כמה שיותר קרוב לצלב שבמרכז.</li>
+                            <li>לאורך כל המבחן מופיעים "משבי רוח" שמזיזים את העיגול – הגיב מהר ותקן את המסלול בעזרת החצים.</li>
+                            <li>תחילה יופיע תרגול כדי להכיר את התרגיל, לאחר מכן התחל מבחן אמיתי בלחיצה על הכפתור המוצג.</li>
                         </ul>
                         <button id="start-flightcontrol" class="btn btn-primary start-test-btn">התחל תרגול</button>
                     </div>
@@ -629,7 +646,6 @@
                 </div>
 
                 <div id="orientation-test" class="test-view" style="display:none">
-                    <button class="instructions-toggle-btn">📖 הוראות</button>
                     <div id="orientation-phase-banner" class="pretest-phase-banner" style="display:none" aria-live="polite"></div>
                     <div class="pretest-actions">
                         <button id="orientation-real-start-button" class="btn btn-secondary" style="display:none">סיימתי תרגול – להתחיל מבחן אמיתי</button>
@@ -847,6 +863,7 @@
     <script src="js/timer-hud.js?v=1.0"></script>
     <script src="js/practice-banner.js?v=1.0"></script>
     <script src="js/scores.js?v=1.0"></script>
+    <script src="js/scores-export.js?v=1.0"></script>
     <script src="js/orientation/orientation-sync.js?v=1.0" type="module"></script>
     <script src="js/flightexam/flightexam-sync.js?v=1.1" type="module"></script>
     <script type="module" src="js/settings.js?v=3.0"></script>

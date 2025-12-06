@@ -175,22 +175,31 @@
       return;
     }
 
+    // מחיקת הגדרות מקומיות בטעינה - תמיד עובדים מול השרת
+    (function clearLocalSettingsOnLoad(){
+      const keysToRemove = [LS_KEY, LS_NORTH, LS_FLIGHTEXAM, LS_NEWEXAM_OLD, LS_ORIENTATION];
+      keysToRemove.forEach(key => {
+        if(localStorage.getItem(key)){
+          console.log('[settings] 🗑️ מוחק הגדרות מקומיות:', key);
+          localStorage.removeItem(key);
+        }
+      });
+    })();
+
     (function fetchExternalDefaults(){
+      // ביטול טעינת הגדרות מקומיות - מסתמכים רק על השרת
+      console.log('[defaults] local config file loading disabled by user request');
+      // עדיין צריך לפתור את ה-Promise כדי שהאפליקציה לא תיתקע
+      if(window._settingsReadyResolve){ window._settingsReadyResolve(); }
+      
+      /*
       fetch(DEFAULT_SETTINGS_JSON_PATH, {cache:'no-store'}).then(r=>{
         if(!r.ok) throw new Error('not found'); return r.json();
       }).then(json=>{
         window.EMBEDDED_DEFAULT_EXPORT = window.EMBEDDED_DEFAULT_EXPORT || json;
-        const hasLocalSettings = !!localStorage.getItem(LS_KEY);
-        const hasLocalOrient = !!localStorage.getItem(LS_ORIENTATION);
-        const hasLocalFlight = !!localStorage.getItem(LS_FLIGHTEXAM);
-        const hasLocalNorth = !!localStorage.getItem(LS_NORTH);
-
-        if(!hasLocalSettings && !hasLocalOrient && !hasLocalFlight && !hasLocalNorth){
-          console.log('[defaults] no local settings found, applying config file');
-          applyExternalConfig(json, false);
-        } else {
-          console.log('[defaults] local settings exist, skipping config file');
-        }
+        // תמיד מחיל את קובץ הקונפיג כ-fallback, השרת ידרוס אח"כ
+        console.log('[defaults] applying config file as fallback');
+        applyExternalConfig(json, false);
         autoLoadDefaultFlightExamParts();
         if(window._settingsReadyResolve){ window._settingsReadyResolve(); }
       }).catch(()=>{
@@ -198,6 +207,7 @@
         autoLoadDefaultFlightExamParts();
         if(window._settingsReadyResolve){ window._settingsReadyResolve(); }
       });
+      */
     })();
 
     function load(k,def){ try{ const s=localStorage.getItem(k); return s? JSON.parse(s): JSON.parse(JSON.stringify(def)); }catch(e){ return JSON.parse(JSON.stringify(def)); } }
@@ -447,6 +457,176 @@
       };
     }
 
+    // פונקציה להורדת הגדרות עדכניות מ-Supabase (נקראת בלחיצה על התחל מבחן)
+    async function fetchLatestSettingsBundle(options){
+      const opts = options || {};
+      if(!window.examData || typeof window.examData.fetchActiveSettings !== 'function'){
+        console.log('[settings] ⚠️ examData או fetchActiveSettings לא זמינים');
+        return { applied: false, reason: 'no-service' };
+      }
+      const readyFn = (typeof window.examData.isReady === 'function') ? window.examData.isReady : () => true;
+      if(!readyFn()){
+        console.log('[settings] ⚠️ examData לא מוכן עדיין');
+        return { applied: false, reason: 'not-ready' };
+      }
+      try {
+        console.log('[settings] 🔄 מוריד הגדרות מ-Supabase...');
+        const remote = await window.examData.fetchActiveSettings();
+        console.log('[settings] 📦 תוכן שהתקבל:', remote);
+        if(remote && remote.payload){
+          const payload = remote.payload;
+          // בדיקה אם יש תוכן הגדרות אמיתי (לא רק testsLayout)
+          const hasSettingsContent = payload.settings || payload.north || payload.flightExam || payload.orientation;
+          if(hasSettingsContent){
+            const forceApply = opts.force !== false;
+            applyExternalConfig(payload, forceApply);
+            console.log('[settings] ✅ הגדרות הוחלו מ-Supabase', { id: remote.id, updatedAt: remote.created_at });
+            return {
+              applied: true,
+              updatedAt: remote.created_at || null,
+              id: remote.id || null
+            };
+          } else {
+            console.log('[settings] ℹ️ ה-payload לא מכיל הגדרות מבחנים (אולי רק testsLayout)');
+            return { applied: false, reason: 'no-test-settings' };
+          }
+        }
+        console.log('[settings] ℹ️ אין הגדרות ב-Supabase');
+        return { applied: false, reason: 'empty' };
+      } catch(err){
+        console.warn('[settings] ❌ שגיאה בהורדת הגדרות', err);
+        return { applied: false, error: err };
+      }
+    }
+    window.refreshAppSettingsFromRemote = fetchLatestSettingsBundle;
+
+    // פונקציה להורדת הגדרות ספציפיות למבחן מהטבלה הייעודית שלו
+    async function fetchTestSpecificSettings(testId, options){
+      const opts = options || {};
+      const table = TEST_SETTINGS_TABLES[testId];
+      if(!table){
+        console.log(`[settings:${testId}] ⚠️ אין טבלת הגדרות ייעודית למבחן זה`);
+        return { applied: false, reason: 'no-table' };
+      }
+      if(!window.supabaseClient){
+        console.log(`[settings:${testId}] ⚠️ Supabase לא מאותחל`);
+        return { applied: false, reason: 'no-supabase' };
+      }
+      try {
+        console.log(`[settings:${testId}] 🔄 מוריד הגדרות ספציפיות מטבלה ${table}...`);
+        const remote = await fetchTestSectionRemote(testId);
+        if(remote && remote.payload){
+          // שמירה מקומית כגיבוי
+          persistTestSectionLocal(testId, remote.payload);
+          
+          // עדכון ההגדרות הגלובליות של המבחן
+          const testConfig = settings.tests.find(t => t.id === testId);
+          if(testConfig && typeof remote.payload === 'object'){
+            // מיפוי שמות שדות מהטופס לשמות ב-config
+            const fieldMapping = {
+              // Eye-Hand
+              'eyehandSeconds': 'seconds',
+              'eyehandDifficulty': 'difficulty',
+              'eyehandPracticeRuns': 'practiceRuns',
+              'eyehandPracticeSeconds': 'practiceSeconds',
+              'eyehandExamCountdownSec': 'examCountdownSec',
+              'eyehandEnablePractice': 'enablePractice',
+              // Reaction
+              'reactionSeconds': 'seconds',
+              'reactionDifficulty': 'difficulty',
+              'reactionPracticeRuns': 'practiceRuns',
+              'reactionPracticeSeconds': 'practiceSeconds',
+              'reactionExamCountdownSec': 'examCountdownSec',
+              'reactionEnablePractice': 'enablePractice',
+              // Memory
+              'memorySeconds': 'seconds',
+              'memoryDifficulty': 'difficulty',
+              'memoryPracticeRuns': 'practiceRuns',
+              'memoryPracticeSeconds': 'practiceSeconds',
+              'memoryExamCountdownSec': 'examCountdownSec',
+              'memoryEnablePractice': 'enablePractice',
+              // Tracking
+              'trackingSeconds': 'seconds',
+              'trackingDifficulty': 'difficulty',
+              'trackingPracticeRuns': 'practiceRuns',
+              'trackingPracticeSeconds': 'practiceSeconds',
+              'trackingExamCountdownSec': 'examCountdownSec',
+              'trackingEnablePractice': 'enablePractice',
+              // Northfind
+              'northfindDifficulty': 'difficulty',
+              'northfindPracticeRuns': 'practiceRuns',
+              'northfindExamCountdownSec': 'examCountdownSec',
+              'northfindTrials': 'trials',
+              'northfindLearnSec': 'learnSec',
+              'northfindSpinSec': 'spinSec',
+              'northfindAnswerSec': 'answerSec',
+              // Flightcontrol
+              'flightcontrolSeconds': 'seconds',
+              'flightcontrolDifficulty': 'difficulty',
+              'flightcontrolPracticeRuns': 'practiceRuns',
+              'flightcontrolPracticeSeconds': 'practiceSeconds',
+              'flightcontrolExamCountdownSec': 'examCountdownSec',
+              'flightcontrolEnablePractice': 'enablePractice',
+              // Targetid
+              'targetidSeconds': 'seconds',
+              'targetidDifficulty': 'difficulty',
+              'targetidPracticeRuns': 'practiceRuns',
+              'targetidPracticeSeconds': 'practiceSeconds',
+              'targetidExamCountdownSec': 'examCountdownSec',
+              'targetidEnablePractice': 'enablePractice',
+              // Orientation
+              'orientationSeconds': 'seconds',
+              'orientationDifficulty': 'difficulty',
+              // Flightexam
+              'flightexamSeconds': 'seconds',
+              'flightexamDifficulty': 'difficulty'
+            };
+            
+            console.log(`[settings:${testId}] 📦 payload שהתקבל:`, JSON.stringify(remote.payload));
+            console.log(`[settings:${testId}] 🔍 testConfig לפני עדכון:`, JSON.stringify(testConfig));
+            
+            Object.keys(remote.payload).forEach(key => {
+              const value = remote.payload[key];
+              if(value === undefined || value === '' || value === null) return;
+              
+              // מצא את שם השדה הנכון
+              const configKey = fieldMapping[key] || key;
+              
+              console.log(`[settings:${testId}] 🔄 מיפוי: ${key} -> ${configKey}, ערך: ${value}`);
+              
+              // המר ערכים מספריים
+              if(['seconds', 'practiceRuns', 'practiceSeconds', 'examCountdownSec', 'trials', 'learnSec', 'spinSec', 'answerSec'].includes(configKey)){
+                const numValue = Number(value);
+                console.log(`[settings:${testId}] 📊 ערך מספרי: ${configKey} = ${numValue}`);
+                testConfig[configKey] = numValue || testConfig[configKey];
+              } else if(configKey === 'enablePractice'){
+                testConfig[configKey] = value === true || value === 'true' || value === '1';
+              } else {
+                testConfig[configKey] = value;
+              }
+            });
+            
+            // עדכון window.appSettings
+            window.appSettings = settings;
+            
+            console.log(`[settings:${testId}] ✅ הגדרות הוחלו ל-testConfig:`, JSON.stringify(testConfig));
+          }
+          
+          return {
+            applied: true,
+            payload: remote.payload,
+            updatedAt: remote.updatedAt || null
+          };
+        }
+        console.log(`[settings:${testId}] ℹ️ אין הגדרות ספציפיות בשרת`);
+        return { applied: false, reason: 'empty' };
+      } catch(err){
+        console.warn(`[settings:${testId}] ❌ שגיאה בהורדת הגדרות ספציפיות`, err);
+        return { applied: false, error: err };
+      }
+    }
+    window.refreshTestSettings = fetchTestSpecificSettings;
+
     async function syncSettingsToSupabase(statusEl){
       if(!window.examData || typeof window.examData.saveSettingsBundle!=='function') return;
       const ready = (typeof window.examData.isReady==='function')? window.examData.isReady(): true;
@@ -458,6 +638,10 @@
       try{
         const metaUser = window.testAuth && typeof window.testAuth.getCurrentUser==='function' ? window.testAuth.getCurrentUser() : 'admin-panel';
         await window.examData.saveSettingsBundle(buildSettingsBundle(), { createdBy: metaUser });
+        // נקה את ה-cache כדי שהנבחנים יקבלו את ההגדרות החדשות
+        if(window.examData.clearSettingsCache){
+          window.examData.clearSettingsCache();
+        }
         if(statusEl){ statusEl.textContent='✓ נשמר ב-Supabase '+new Date().toLocaleTimeString(); statusEl.style.color='#10b981'; }
       } catch(err){
         console.warn('[settings] syncSettingsToSupabase failed', err);
@@ -468,7 +652,17 @@
     async function hydrateSettingsFromSupabase(){
       if(!window.examData || typeof window.examData.fetchActiveSettings!=='function') return;
       if(typeof window.examData.isReady==='function' && !window.examData.isReady()) return;
+      
+      // המתן לטעינת הגדרות ברירת מחדל (JSON) לפני דריסה עם הגדרות מהשרת
+      // זה מונע מצב שבו הגדרות השרת נטענות מהר יותר ואז נדרסות ע"י ה-JSON המקומי
+      if(window.settingsReady){
+          // console.log('[settings] Waiting for local JSON config to load...');
+          await window.settingsReady;
+          // console.log('[settings] Local JSON config loaded, proceeding with Supabase hydration');
+      }
+
       try{
+        console.log('[settings] 🔄 טוען הגדרות מ-Supabase בטעינה ראשונית...');
         const remote = await window.examData.fetchActiveSettings();
         if(remote && remote.payload){
           const payload=remote.payload;
@@ -1237,59 +1431,59 @@
           <!-- North Find Test Settings -->
           <div class="settings-section section-northfind" data-tab-section="northfind" style="display:none">
             <h3>מבחן מציאת הצפון</h3>
+            
+            <h4 style="margin-bottom:16px">הגדרות כלליות</h4>
             <div class="form-grid">
-              <div class="form-group">
-                <label for="northfindSeconds">משך המבחן (שניות)</label>
-                <input id="northfindSeconds" type="number" min="5" max="600" value="45">
-                <span class="form-hint">זמן כולל למבחן (כל הניסיונות)</span>
-              </div>
               <div class="form-group">
                 <label for="northfindDifficulty">רמת קושי</label>
                 <select id="northfindDifficulty">
-                  <option>קל</option>
-                  <option selected>בינוני</option>
-                  <option>קשה</option>
+                  <option value="קל">קל</option>
+                  <option value="בינוני" selected>בינוני</option>
+                  <option value="קשה">קשה</option>
                 </select>
-                <span class="form-hint">משפיע על מהירות הסיבוב</span>
-              </div>
-              <h4 style="margin-top:20px;margin-bottom:10px;grid-column:1/-1">הגדרות תרגול</h4>
-              <div class="form-group">
-                <label for="northfindPracticeRuns">כמות ניסיונות תרגול</label>
-                <input id="northfindPracticeRuns" type="number" min="1" max="10" value="1">
-              </div>
-              <div class="form-group">
-                <label for="northfindPracticeSeconds">זמן תרגול (שניות)</label>
-                <input id="northfindPracticeSeconds" type="number" min="5" max="300" value="30">
-              </div>
-              <div class="form-group">
-                <label for="northfindExamCountdownSec">המתנה למבחן (שניות)</label>
-                <input id="northfindExamCountdownSec" type="number" min="0" max="60" value="5">
-                <span class="form-hint">זמן המתנה מסיום התרגול ועד התחלת המבחן</span>
+                <span class="form-hint">קל: מעט אלמנטים, סיבוב איטי | קשה: הרבה אלמנטים, סיבוב מהיר</span>
               </div>
             </div>
-            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות מפורטות</h4>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות תרגול</h4>
             <div class="form-grid">
               <div class="form-group">
-                <label for="northTrials">מספר ניסיונות</label>
-                <input id="northTrials" type="number" min="1" max="20" value="5">
-                <span class="form-hint">מספר הסיבובים במבחן</span>
+                <label for="northfindPracticeRuns">כמות ניסיונות לתרגול</label>
+                <input id="northfindPracticeRuns" type="number" min="1" max="10" value="1">
+                <span class="form-hint">מספר הסבבים בשלב התרגול</span>
               </div>
               <div class="form-group">
-                <label for="northShowNorth">זמן הצגת צפון (שניות)</label>
-                <input id="northShowNorth" type="number" min="1" max="10" value="3">
-                <span class="form-hint">כמה זמן להציג את חץ הצפון</span>
+                <label for="northfindExamCountdownSec">זמן המתנה למבחן (שניות)</label>
+                <input id="northfindExamCountdownSec" type="number" min="0" max="60" value="5">
+                <span class="form-hint">ספירה לאחור מסיום התרגול ועד התחלת המבחן</span>
+              </div>
+            </div>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">הגדרות מבחן</h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="northfindTrials">כמות ניסיונות במבחן</label>
+                <input id="northfindTrials" type="number" min="1" max="20" value="5">
+                <span class="form-hint">מספר הסבבים במבחן האמיתי</span>
               </div>
               <div class="form-group">
-                <label for="northSpin">משך סיבוב (שניות)</label>
-                <input id="northSpin" type="number" min="3" max="30" value="6">
-                <span class="form-hint">כמה זמן המפה מסתובבת</span>
+                <label for="northfindLearnSec">זמן צפיה בתמונה (שניות)</label>
+                <input id="northfindLearnSec" type="number" min="1" max="30" value="10">
+                <span class="form-hint">כמה זמן להציג את חץ הצפון על המפה</span>
               </div>
               <div class="form-group">
-                <label for="northAnswer">זמן תגובה (שניות)</label>
-                <input id="northAnswer" type="number" min="3" max="60" value="10">
+                <label for="northfindSpinSec">זמן סיבוב התמונה (שניות)</label>
+                <input id="northfindSpinSec" type="number" min="2" max="30" value="6">
+                <span class="form-hint">כמה זמן המפה מסתובבת (רמת קושי משפיעה על המהירות)</span>
+              </div>
+              <div class="form-group">
+                <label for="northfindAnswerSec">זמן מענה לתשובה (שניות)</label>
+                <input id="northfindAnswerSec" type="number" min="3" max="60" value="10">
                 <span class="form-hint">זמן לבחירת מיקום הצפון</span>
               </div>
             </div>
+            
+            <h4 style="margin-top:30px;margin-bottom:16px">תמונות מפה</h4>
             <div class="north-upload-card">
               <div class="north-upload-actions">
                 <button id="northImagesUploadBtn" type="button" class="btn btn-secondary" style="padding:10px 18px;border-radius:10px;">⬆ העלה מפות</button>
@@ -1789,17 +1983,37 @@
         btn.innerHTML = '🧪 פתח מבחן לבדיקה';
         btn.title = `פתח את מבחן ${testNameMap[testKey]} לבדיקה (ללא שמירת תוצאות)`;
         
-        btn.onclick = (e) => {
+        btn.onclick = async (e) => {
           e.preventDefault();
           const screenId = testScreenMap[testKey];
           const startBtnId = testStartBtnMap[testKey];
+          
+          // Show loading state
+          const originalText = btn.innerHTML;
+          btn.disabled = true;
+          btn.innerHTML = '⏳ טוען הגדרות...';
+          
+          // Fetch test-specific settings from server (not general settings)
+          if(window.refreshTestSettings){
+            try {
+              console.log(`[settings] 🔄 מוריד הגדרות ספציפיות למבחן ${testKey} לפני פתיחת מבחן לבדיקה...`);
+              await window.refreshTestSettings(testKey, { force: true });
+            } catch(err){
+              console.warn('[settings] Failed to refresh test settings before preview', err);
+            }
+          }
+          
+          // Restore button
+          btn.disabled = false;
+          btn.innerHTML = originalText;
           
           // Close settings panel
           const settingsPanel = document.getElementById('settingsPanel');
           if(settingsPanel) settingsPanel.classList.remove('open');
           
-          // Mark as admin testing mode
-          window.__adminTestMode = true;
+          if(window.testAuth && typeof window.testAuth.enterPreviewMode === 'function'){
+            window.testAuth.enterPreviewMode(testKey, { returnTest:'admin', reopenSettings:true });
+          }
           
           // Navigate to test screen using switchTest
           if(window.switchTest) {
@@ -4605,24 +4819,40 @@
     // Promise גלובלי המאפשר למודולים להמתין לסיום טעינת קובץ ברירת המחדל
     window.settingsReady = new Promise(res=>{ window._settingsReadyResolve = res; });
 
-    function buildTestSelectorUI(){
+    window.buildTestSelectorUI = function(){
+      console.log('[settings] buildTestSelectorUI called');
       const sel = document.getElementById('test-selector');
-      if(!sel) return;
+      if(!sel) { console.warn('[settings] #test-selector not found'); return; }
       sel.innerHTML='';
       // בנייה מחדש לפי הסדר והכללת המבחנים
-      settings.tests.filter(t=>t.include).forEach((t,i)=>{
-        const btn=document.createElement('button');
-        btn.className='nav-btn';
-        btn.dataset.test=t.id;
-        btn.textContent=t.name;
-        // נעילת מבחנים אחרי הראשון למשתמש רגיל (אם testAuth לא admin)
-        if(i>0 && window.testAuth && !window.testAuth.isAdmin()) btn.disabled=true;
-        sel.appendChild(btn);
-      });
+      // שימוש ב-window.appSettings אם קיים, אחרת במשתמש המקומי
+      const currentSettings = window.appSettings || settings;
+      if(currentSettings && Array.isArray(currentSettings.tests)){
+        console.log('[settings] Building UI with tests:', currentSettings.tests.map(t=>t.id));
+        currentSettings.tests.filter(t=>t.include).forEach((t,i)=>{
+          const btn=document.createElement('button');
+          btn.className='nav-btn';
+          btn.dataset.test=t.id;
+          btn.textContent=t.name;
+          // נעילת מבחנים אחרי הראשון למשתמש רגיל (אם testAuth לא admin)
+          if(i>0 && window.testAuth && !window.testAuth.isAdmin()) btn.disabled=true;
+          sel.appendChild(btn);
+        });
+      }
       // הפעלה מחדש של הניווט אם פונקציה קיימת
       if(window.initDynamicNav) window.initDynamicNav();
-      window.dispatchEvent(new CustomEvent('settings-updated'));
+    };
+
+    function buildTestSelectorUI(){
+      window.buildTestSelectorUI();
     }
+    
+    // האזנה לאירוע עדכון הגדרות כדי לרענן את ה-UI
+    window.addEventListener('settings-updated', ()=>{
+        console.log('[settings] settings-updated event received, rebuilding UI');
+        window.buildTestSelectorUI();
+    });
+
     buildTestSelectorUI();
     scheduleHydrateFromSupabase(5);
     scheduleEyehandPathHydration(8);

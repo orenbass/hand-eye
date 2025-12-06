@@ -306,6 +306,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.setCountdown(null);
             clearInterval(this.timerId);
             this.timerId = null;
+            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים
 
             this.phase='practice-complete';
             this.practiceDone = true;
@@ -414,9 +415,12 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
         handleNode(index){
             if(this.phase!=='input') return;
+            
+            // הדגשה חזקה בלחיצת משתמש
+            this.flashNode(index, 'pressed', 400);
+            
             const expected = this.sequence[this.userIndex];
             if(index===expected){
-                this.flashNode(index,'success',320);
                 this.userIndex++;
                 if(this.userIndex===this.sequence.length){
                     this.maxAchieved = Math.max(this.maxAchieved, this.sequence.length);
@@ -431,7 +435,12 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
                     this.timeoutIds.push(id);
                 }
             } else {
-                this.flashNode(index,'error',650);
+                // הדגש טעות בצבע אדום
+                const node = this.nodes[index];
+                if(node){
+                    node.classList.add('error');
+                    setTimeout(()=> node.classList.remove('error'), 650);
+                }
                 this.handleFailure();
             }
         }
@@ -453,17 +462,20 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
                 return;
             }
 
+            // מבחן אמיתי
             if(this.lives>0){
                 this.setStatus(`טעות... ניסיון נוסף יתחיל בעוד ${this.retryDelaySec} שניות`, 'error');
                 await this.startCooldown();
             } else {
-                this.setStatus('לא נותרו ניסיונות. המבחן הסתיים.', 'error');
-                setTimeout(()=> this.finish(false), 800);
+                // אין יותר חיים - סיום מיידי
+                this.setStatus('', 'muted');
+                this.finish(false);
             }
         }
 
         async startCooldown(){
             const token = ++this.cooldownToken;
+            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים מיד
             let remaining = this.retryDelaySec;
             while(remaining>0 && token===this.cooldownToken && this.phase==='cooldown'){
                 const label = this.mode==='practice' ? 'בתרגול' : 'במבחן';
@@ -486,6 +498,15 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             node.classList.add(cls);
             const id=setTimeout(()=> node.classList.remove(cls), duration);
             this.timeoutIds.push(id);
+        }
+
+        // ניקוי כל האפקטים מהכפתורים
+        clearAllNodeEffects(){
+            this.nodes.forEach(node => {
+                if(node){
+                    node.classList.remove('active', 'pressed', 'error', 'success');
+                }
+            });
         }
 
         startTimer(){
@@ -516,6 +537,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             clearInterval(this.timerId);
             this.timerId=null;
             this.setCountdown(null);
+            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים
             this.toggleRealStartButton(false);
             this.setBanner('המבחן האמיתי הסתיים', 'real');
             this.setPadMode('done');

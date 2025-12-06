@@ -11,7 +11,15 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   const statsBox=document.getElementById('northfind-stats');
   const statusEl=document.getElementById('northfind-status');
   const layoutEl=document.getElementById('northfind-layout');
+  const canvasContainer = canvas ? canvas.parentElement : null;
   if(!btn||!canvas) return; const ctx=canvas.getContext('2d');
+  
+  // הפוך את מיכל הקאנבס לשקוף
+  if(canvasContainer){
+    canvasContainer.style.background = 'transparent';
+    canvasContainer.style.boxShadow = 'none';
+    canvasContainer.style.border = 'none';
+  }
 
   const DEFAULT_MAP_IMAGES = [
     'assets/images/northfind/North_snapshot_11-10-2025_22_59_45.jpeg',
@@ -21,7 +29,17 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     'assets/images/northfind/North_snapshot_11-10-2025_23_04_05.jpeg'
   ];
 
+  // Format seconds to MM:SS
+  function formatTime(secs) {
+    const s = Math.max(0, Math.round(secs));
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+
   let cfg=null, trials=5, learnSec=10, spinSec=6, answerSec=10, numArrows=24, mapImages=[];
+  let distractorCount=6, colorVariation=0.25; // הגדרות קושי
+  let distractors=[]; // אלמנטים מסיחים
   let currentTrial=0, phase='idle', phaseStartTime=0;
   let mapRotation=0, finalRotation=0;
   let northPointAngle=0;
@@ -83,7 +101,7 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
           בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
 ודא שאתה מוכן לפני המעבר למבחן.
         </p>
-        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+        <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
     `;
     modal.style.display = 'flex';
     
@@ -179,9 +197,11 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     }
 
     loadConfig();
-    const totalRuns = (cfg && cfg.practiceRuns) || 1;
-    const currentRun = practiceRunsComplete + 1;
-
+    
+    // בתרגול: practiceRuns קובע את מספר הסבבים (כל סבב = צפיה + סיבוב + ניחוש)
+    const practiceTrials = (cfg && cfg.practiceRuns) || 1;
+    trials = practiceTrials; // דריסת trials לתרגול
+    
     if(window.practiceBanner) {
         window.practiceBanner.show({
             label: 'מצב תרגול',
@@ -190,30 +210,39 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
         });
     }
     if(window.timerHUD) {
-        window.timerHUD.show('זמן תרגול', '00:00', 'practice');
+        window.timerHUD.show('זמן', formatTime(answerSec), 'practice');
     }
 
-    setStatus(`תרגול ${currentRun}/${totalRuns}: למד את כיוון החץ ובחר את הצפון`, 'info');
+    setStatus(`תרגול: ${practiceTrials} סבבים - למד את כיוון החץ ובחר את הצפון`, 'info');
     updateStatsVisibility();
     phase='idle';
-    startSeries('practice');
+    startSeriesDirect();
+  }
+
+  // התחלת סדרה ישירה (ללא קריאה ל-loadConfig שוב)
+  function startSeriesDirect(){
+    if(phase!=='idle') return;
+    if(trialTimeout){ clearTimeout(trialTimeout); trialTimeout=null; }
+    updateStatsVisibility();
+    if(window.enterFullscreenMode) window.enterFullscreenMode();
+    applyInteractionLock(seriesMode);
+    answers=[];
+    currentTrial=0;
+    mapRotation=0; finalRotation=0;
+    selectedArrow=null; hoveredArrow=null;
+    resize();
+    if(window.testAuth && !window.testAuth.isAdmin()) statsBox && (statsBox.style.display = 'none');
+    else statsBox && (statsBox.style.display = stage==='real' ? 'block' : 'none');
+    if(trialEl) trialEl.textContent='0';
+    if(totalEl) totalEl.textContent=trials;
+    startTrial();
   }
 
   function finishPractice(options={}){
     const { skipMessage=false, keepFullscreen=true } = options;
     if(trialTimeout){ clearTimeout(trialTimeout); trialTimeout=null; }
 
-    practiceRunsComplete++;
-    const totalRuns = (cfg && cfg.practiceRuns) || 1;
-    
-    if(practiceRunsComplete < totalRuns) {
-        setStatus(`סבב תרגול ${practiceRunsComplete} הסתיים. מתחיל סבב ${practiceRunsComplete+1}...`, 'info');
-        setTimeout(() => {
-             startPractice(true);
-        }, 1500);
-        return;
-    }
-
+    // התרגול הסתיים - כל הסבבים הושלמו (מספר הסבבים נקבע ב-practiceRuns)
     stage='practice'; practiceDone=true; seriesMode=null; phase='idle';
     releaseInteractionLock();
     
@@ -246,6 +275,11 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
         window.practiceBanner.attach(document.getElementById('northfind-practice-slot'));
     }
 
+    // טען מחדש הגדרות ווודא שמשתמשים ב-trials של המבחן (לא של התרגול)
+    loadConfig();
+    // במבחן: trials קובע את מספר הסבבים
+    console.log('[northfind] מבחן אמת - trials:', trials, 'learnSec:', learnSec, 'spinSec:', spinSec, 'answerSec:', answerSec);
+
     if(window.practiceBanner) {
         window.practiceBanner.show({
             label: 'מבחן אמת',
@@ -253,12 +287,14 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
             mode: 'real'
         });
     }
-    if(window.timerHUD) window.timerHUD.hide();
+    if(window.timerHUD) {
+        window.timerHUD.show('זמן מענה', formatTime(answerSec), 'real');
+    }
     
-    setStatus('מבחן אמיתי: למד את החץ ובחר במדויק את הצפון.', 'info');
+    setStatus('למד את כיוון החץ ובחר במדויק את הצפון', 'info');
     updateStatsVisibility();
     phase='idle';
-    startSeries('real');
+    startSeriesDirect();
   }
 
   function startSeries(mode){
@@ -282,7 +318,34 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     startTrial();
   }
 
-  function resize(){ const size=Math.floor(Math.min(window.innerWidth*0.9, window.innerHeight*0.8)); canvas.width=size; canvas.height=size; canvas.style.width=size+'px'; canvas.style.height=size+'px'; mapRadius=Math.min(canvas.width,canvas.height)*0.35; }
+  function resize(){ 
+    // חישוב גובה זמין בין הבאנרים למעלה לפוטר למטה
+    const headerRow = document.querySelector('#northfind-screen .orientation-header-row');
+    const footerRow = document.querySelector('#northfind-screen .orientation-footer-row');
+    
+    // גובה האלמנטים העליונים והתחתונים
+    const headerHeight = headerRow ? headerRow.offsetHeight : 80;
+    const footerHeight = footerRow ? footerRow.offsetHeight : 100;
+    const padding = 40; // מרווח בטיחות
+    
+    // הגובה הזמין לקאנבס
+    const availableHeight = window.innerHeight - headerHeight - footerHeight - padding;
+    const availableWidth = window.innerWidth - 40; // מרווח מהצדדים
+    
+    // הקאנבס יהיה ריבועי - לפי המימד הקטן יותר
+    const size = Math.floor(Math.min(availableWidth, availableHeight));
+    
+    canvas.width = size; 
+    canvas.height = size; 
+    canvas.style.width = size + 'px'; 
+    canvas.style.height = size + 'px'; 
+    canvas.style.background = 'transparent';
+    
+    // המפה קטנה יותר כדי לתת מקום לחיצים מסביב (החיצים בערך 30px מסביב)
+    mapRadius = Math.min(canvas.width, canvas.height) * 0.38; 
+    
+    console.log('[northfind] resize - availableHeight:', availableHeight, 'size:', size, 'mapRadius:', mapRadius);
+  }
   resize(); window.addEventListener('resize',()=> phase!=='idle' && resize());
 
   function loadConfig(){ 
@@ -292,10 +355,48 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     spinSec=cfg.spinSec; 
     answerSec=cfg.answerSec; 
     numArrows=cfg.numArrows;
+    distractorCount = cfg.distractorCount || 6;
+    colorVariation = cfg.colorVariation || 0.25;
     mapImages = Array.isArray(cfg.mapImages) && cfg.mapImages.length ? cfg.mapImages : DEFAULT_MAP_IMAGES;
+    console.log('[northfind] loadConfig - difficulty:', cfg.difficulty, 'distractorCount:', distractorCount, 'spinSec:', spinSec);
   }
 
-  function drawMap(){ if(!currentMapReady||!currentMapImg) return; ctx.save(); ctx.translate(canvas.width/2,canvas.height/2); ctx.beginPath(); ctx.arc(0,0,mapRadius,0,Math.PI*2); ctx.clip(); ctx.rotate(mapRotation); const size=mapRadius*2; ctx.drawImage(currentMapImg,-size/2,-size/2,size,size); ctx.restore(); ctx.save(); ctx.translate(canvas.width/2,canvas.height/2); ctx.strokeStyle='#334155'; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(0,0,mapRadius,0,Math.PI*2); ctx.stroke(); ctx.restore(); }
+  // אין צורך באלמנטים נוספים - המפה עצמה כוללת את כל הבתים והעצים
+  function generateDistractors(){
+    distractors = [];
+    // המפה כבר מכילה את כל האלמנטים הנדרשים
+  }
+
+  // אין ציור נוסף - המפה מספיקה
+  function drawDistractors(){
+    // לא מציירים כלום נוסף על המפה
+  }
+
+  function drawMap(){ 
+    if(!currentMapReady||!currentMapImg) return; 
+    ctx.save(); 
+    ctx.translate(canvas.width/2,canvas.height/2); 
+    ctx.beginPath(); 
+    ctx.arc(0,0,mapRadius,0,Math.PI*2); 
+    ctx.clip(); 
+    ctx.rotate(mapRotation); 
+    const size=mapRadius*2; 
+    ctx.drawImage(currentMapImg,-size/2,-size/2,size,size); 
+    ctx.restore(); 
+    
+    // ציור אלמנטים מסיחים על המפה
+    drawDistractors();
+    
+    // מסגרת המפה
+    ctx.save(); 
+    ctx.translate(canvas.width/2,canvas.height/2); 
+    ctx.strokeStyle='#334155'; 
+    ctx.lineWidth=6; 
+    ctx.beginPath(); 
+    ctx.arc(0,0,mapRadius,0,Math.PI*2); 
+    ctx.stroke(); 
+    ctx.restore(); 
+  }
 
   function drawLearningArrow(){
     const a = northPointAngle + mapRotation;
@@ -349,9 +450,8 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
   function drawSelectionArrows(){ computeArrowPositions(); arrowPositions.forEach(p=>{ const sz=16; let bg='#1e3a8a'; if(selectedArrow===p.i) bg='#facc15'; else if(hoveredArrow===p.i) bg='#10b981'; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle); ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(0,0,sz+8,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.stroke(); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(-sz*.8,0); ctx.lineTo(sz*.3,0); ctx.stroke(); const tip=sz+4, base=sz*.65; ctx.translate(-tip/2,0); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(tip,0); ctx.lineTo(0,base); ctx.lineTo(0,-base); ctx.closePath(); ctx.fill(); ctx.strokeStyle= selectedArrow===p.i? '#854d0e':'#1e293b'; ctx.lineWidth=1.5; ctx.stroke(); ctx.restore(); }); }
 
   function render(){ 
+      // רקע שקוף - רק מנקים
       ctx.clearRect(0,0,canvas.width,canvas.height); 
-      ctx.fillStyle='#1e293b'; 
-      ctx.fillRect(0,0,canvas.width,canvas.height); 
       drawMap(); 
       
       if(phase==='learn'){ 
@@ -361,7 +461,7 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
           // Update HUD
           if(window.timerHUD) {
               const rem = Math.max(0, learnSec - el);
-              window.timerHUD.update(rem.toFixed(1) + 's');
+              window.timerHUD.update(formatTime(rem));
           }
       } else if(phase==='answer'){ 
           const el=(performance.now()-phaseStartTime)/1000; 
@@ -370,21 +470,82 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
           // Update HUD
           if(window.timerHUD) {
               const rem = Math.max(0, answerSec - el);
-              window.timerHUD.update(rem.toFixed(1) + 's');
+              window.timerHUD.update(formatTime(rem));
           }
-          
-          ctx.fillStyle='#fff'; 
-          ctx.font='bold 20px system-ui'; 
-          ctx.textAlign='center'; 
-          ctx.fillText('בחר לאן החץ מצביע', canvas.width/2, canvas.height-40); 
       } 
   }
 
   function step(){ if(phase==='idle'||phase==='done') return; const elapsed=(performance.now()-phaseStartTime)/1000; if(phase==='learn'){ if(elapsed>=learnSec){ startSpinPhase(); return; } render(); requestAnimationFrame(step); } else if(phase==='spin'){ const t=Math.min(1,elapsed/spinSec); mapRotation = finalRotation * (1 - Math.pow(1-t,3)); if(elapsed>=spinSec){ mapRotation=finalRotation; startAnswerPhase(); return; } render(); requestAnimationFrame(step); } else if(phase==='answer'){ if(elapsed>=answerSec){ registerAnswer(null,true); return; } render(); requestAnimationFrame(step); } }
 
-  function startLearnPhase(){ phase='learn'; phaseStartTime=performance.now(); mapRotation=0; northPointAngle=Math.random()*Math.PI*2; hoveredArrow=null; selectedArrow=null; render(); requestAnimationFrame(step); }
-  function startSpinPhase(){ phase='spin'; phaseStartTime=performance.now(); spinSec = 5; finalRotation = ((3 + Math.random()*2) * 2 * Math.PI) + Math.random()*2*Math.PI; render(); requestAnimationFrame(step); }
-  function startAnswerPhase(){ phase='answer'; phaseStartTime=performance.now(); hoveredArrow=null; selectedArrow=null; render(); }
+  function startLearnPhase(){ 
+    phase='learn'; 
+    phaseStartTime=performance.now(); 
+    mapRotation=0; 
+    // בוחרים זווית שמתאימה בדיוק לאחד מהחצים לבחירה
+    // כך שתהיה תשובה אחת נכונה מוחלטת
+    const arrowStep = (Math.PI * 2) / numArrows;
+    const randomArrowIndex = Math.floor(Math.random() * numArrows);
+    northPointAngle = randomArrowIndex * arrowStep;
+    
+    hoveredArrow=null; 
+    selectedArrow=null; 
+    // יצירת אלמנטים מסיחים חדשים לכל סבב
+    generateDistractors();
+    // הצג timer עם זמן צפייה
+    if(window.timerHUD) {
+        window.timerHUD.show('זמן צפייה', formatTime(learnSec), stage==='practice' ? 'practice' : 'real');
+    }
+    render(); 
+    requestAnimationFrame(step); 
+  }
+  function startSpinPhase(){ 
+    phase='spin'; 
+    phaseStartTime=performance.now(); 
+    
+    // חישוב סיבוב שיגרום לתשובה הנכונה להיות בדיוק על אחד מהחצים
+    // התשובה הנכונה אחרי סיבוב היא: (northPointAngle + finalRotation) % (2π)
+    // צריך שזה יהיה כפולה של arrowStep
+    const arrowStep = (Math.PI * 2) / numArrows;
+    
+    // בוחרים חץ יעד אקראי (לאן התשובה הנכונה תהיה)
+    const targetArrowIndex = Math.floor(Math.random() * numArrows);
+    const targetAngle = targetArrowIndex * arrowStep;
+    
+    // מחשבים כמה סיבוב צריך כדי להגיע לחץ היעד
+    // targetAngle = (northPointAngle + rotation) % (2π)
+    // rotation = targetAngle - northPointAngle
+    let neededRotation = targetAngle - northPointAngle;
+    
+    // מוסיפים סיבובים שלמים (3-5 סיבובים) כדי שיראה דרמטי
+    const fullRotations = (3 + Math.floor(Math.random() * 3)) * 2 * Math.PI;
+    finalRotation = fullRotations + neededRotation;
+    
+    // וידוא שהסיבוב חיובי
+    if(finalRotation < fullRotations) {
+      finalRotation += 2 * Math.PI;
+    }
+    
+    // הסתר timer בזמן הסיבוב
+    if(window.timerHUD) {
+        window.timerHUD.show('סיבוב...', '', stage==='practice' ? 'practice' : 'real');
+    }
+    render(); 
+    requestAnimationFrame(step); 
+  }
+  function startAnswerPhase(){ 
+    phase='answer'; 
+    phaseStartTime=performance.now(); 
+    hoveredArrow=null;
+    // הצג הוראה בסטטוס למטה
+    setStatus('בחר לאן החץ מצביע', 'info'); 
+    selectedArrow=null; 
+    // הצג את ה-timer עם זמן מענה
+    if(window.timerHUD) {
+        window.timerHUD.show('זמן מענה', formatTime(answerSec), stage==='practice' ? 'practice' : 'real');
+    }
+    render(); 
+    requestAnimationFrame(step);
+  }
 
   function registerAnswer(userAngle,timeout){ 
     const correct=(northPointAngle+mapRotation)%(Math.PI*2); 
@@ -403,14 +564,15 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
 
   async function startTrial(){ 
     if(trialTimeout){ clearTimeout(trialTimeout); trialTimeout=null; }
-    if(!Array.isArray(mapImages)||!mapImages.length) mapImages=generateRandomMaps(trials); 
+    // יצירת מפות עם מספר האלמנטים לפי רמת הקושי
+    if(!Array.isArray(mapImages)||!mapImages.length) mapImages=generateRandomMaps(trials, distractorCount); 
     const idx=currentTrial%mapImages.length; 
     try{ 
       currentMapImg=await loadMapImage(mapImages, idx); 
       currentMapReady=true; 
       startLearnPhase(); 
     }catch(e){ 
-      const fallback=generateRandomMaps(1)[0]; 
+      const fallback=generateRandomMaps(1, distractorCount)[0]; 
       currentMapImg=new Image(); 
       currentMapImg.onload=()=>{ currentMapReady=true; startLearnPhase(); }; 
       currentMapImg.src=fallback; 
@@ -442,7 +604,37 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
 
   function start(){ if(phase!=='idle') return; if(window.enterFullscreenMode) window.enterFullscreenMode(); loadConfig(); answers=[]; currentTrial=0; mapRotation=0; finalRotation=0; selectedArrow=null; hoveredArrow=null; resize(); if(window.testAuth && !window.testAuth.isAdmin()) statsBox && (statsBox.style.display='none'); else statsBox && (statsBox.style.display='block'); totalEl && (totalEl.textContent=trials); startTrial(); }
 
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', async () => {
+    // Show loading state
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'טוען הגדרות...';
+    
+    // Fetch test-specific settings from server
+    if(window.refreshTestSettings){
+        try {
+            console.log('[northfind] 🔄 מוריד הגדרות ספציפיות למבחן מציאת הצפון...');
+            const fetchPromise = window.refreshTestSettings('northfind', { force: true });
+            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 5000));
+            const result = await Promise.race([fetchPromise, timeoutPromise]);
+            if(result && result.applied){
+                console.log('[northfind] ✅ הגדרות ספציפיות הורדו בהצלחה', result.payload);
+            } else if(result && result.timeout){
+                console.warn('[northfind] ⏱️ Timeout - משתמש בהגדרות מקומיות');
+            } else if(result && result.reason){
+                console.log('[northfind] ℹ️ לא נמצאו הגדרות ספציפיות:', result.reason);
+            }
+        } catch(e){
+            console.warn('[northfind] ❌ שגיאה בהורדת הגדרות ספציפיות', e);
+        }
+    } else {
+        console.log('[northfind] ⚠️ פונקציית refreshTestSettings לא זמינה');
+    }
+    
+    // Restore button
+    btn.disabled = false;
+    btn.textContent = originalText;
+    
     if(!prePracticeShown){
         prePracticeShown=true;
         showPrePracticeModal(startPractice);

@@ -59,7 +59,23 @@ import { makeRng, spawnTarget } from './targetid.utils.js';
     }
   }
 
-  function handleStartClick() {
+  async function handleStartClick() {
+    // Download settings from server first
+    if(startBtn) {
+      const originalText = startBtn.textContent;
+      startBtn.disabled = true;
+      startBtn.textContent = 'טוען הגדרות...';
+      try {
+        if(window.refreshTestSettings) {
+          await window.refreshTestSettings('targetid', { force: true });
+        }
+      } catch(e) {
+        console.warn('Failed to refresh targetid settings:', e);
+      }
+      startBtn.disabled = false;
+      startBtn.textContent = originalText;
+    }
+    
     if(!prePracticeShown) {
       prePracticeShown = true;
       showPrePracticeModal(startPractice);
@@ -111,7 +127,7 @@ import { makeRng, spawnTarget } from './targetid.utils.js';
           בלחיצה על  <strong>הבנתי- להתחיל את המבחן האמיתי</strong>. יתחיל המבחן האמיתי מיד. הציון הבא ייחשב כציון הרשמי.
 ודא שאתה מוכן לפני המעבר למבחן.
         </p>
-        <button type="button" data-action="confirm" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
+        <button type="button" data-action="start-real" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">הבנתי – להתחיל מבחן אמיתי</button>
     `;
     modal.style.display = 'flex';
     

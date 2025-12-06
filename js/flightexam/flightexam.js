@@ -465,6 +465,23 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     console.log('[flightexam] start invoked');
     adjustLayout();
     if(active) return;
+    
+    // Download settings from server first
+    if(startBtn) {
+      const originalText = startBtn.textContent;
+      startBtn.disabled = true;
+      startBtn.textContent = 'טוען הגדרות...';
+      try {
+        if(window.refreshTestSettings) {
+          await window.refreshTestSettings('flightexam', { force: true });
+        }
+      } catch(e) {
+        console.warn('[flightexam] Failed to refresh settings:', e);
+      }
+      startBtn.disabled = false;
+      startBtn.textContent = originalText;
+    }
+    
     prePracticeShown = false; // Reset for new session
     if(window.enterFullscreenMode) window.enterFullscreenMode();
     

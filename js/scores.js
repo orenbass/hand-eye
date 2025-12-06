@@ -15,7 +15,11 @@
     let previousScreen = null;
     const candidateAttemptsCache = new Map();
 
-    const ensureAdmin = ()=> window.testAuth && typeof window.testAuth.isAdmin === 'function' && window.testAuth.isAdmin();
+    const ensureAdmin = ()=>{
+        if(!window.testAuth) return false;
+        if(typeof window.testAuth.hasAdminAccess === 'function') return window.testAuth.hasAdminAccess();
+        return typeof window.testAuth.isAdmin === 'function' ? window.testAuth.isAdmin() : false;
+    };
 
     openBtn.addEventListener('click', ()=>{
         if(!ensureAdmin()){
@@ -98,6 +102,12 @@
         try {
             const rows = await window.examData.listUsers({ limit:500 });
             const grouped = groupByCandidate(rows || []);
+            
+            // עדכן את מודול הייצוא עם הנתונים
+            if(window.scoresExport && typeof window.scoresExport.setData === 'function'){
+                window.scoresExport.setData(grouped);
+            }
+            
             renderGroups(grouped);
             statusEl.textContent = grouped.length ? `הוצגו ${grouped.length} נבחנים` : 'אין נבחנים להצגה';
         } catch(err){
@@ -105,6 +115,15 @@
             statusEl.textContent = 'שגיאה בטעינת הנתונים';
         }
     }
+
+    // פונקציה לרינדור מחדש עם נתונים מסוננים
+    window._renderGroupsCallback = function(groups){
+        renderGroups(groups || []);
+        const statusEl = document.getElementById('scores-status');
+        if(statusEl){
+            statusEl.textContent = groups.length ? `מוצגים ${groups.length} נבחנים` : 'אין נבחנים להצגה';
+        }
+    };
 
     function groupByCandidate(rows){
         const map = new Map();
@@ -142,7 +161,7 @@
             tableBody.appendChild(row);
             return;
         }
-        groups.forEach(group=>{
+        groups.forEach((group, groupIndex)=>{
             const summary = summarizeGroup(group);
             const row = document.createElement('tr');
             row.innerHTML = `
@@ -152,9 +171,26 @@
                 <td style="text-align:center;padding:10px 12px">${summary.totalTests}</td>
                 <td style="text-align:center;padding:10px 12px">${summary.latestDate ? formatDate(summary.latestDate) : '-'}</td>
                 <td style="text-align:center;padding:10px 12px">${summary.avgScore !== null ? summary.avgScore.toFixed(1) : '-'}</td>
-                <td style="text-align:center;padding:6px 12px"><button class="btn btn-secondary" type="button" data-action="expand">צפייה במבחנים</button></td>
+                <td style="text-align:center;padding:6px 12px">
+                    <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+                        <button class="btn btn-secondary" type="button" data-action="expand" style="font-size:0.85rem;padding:6px 12px">צפייה במבחנים</button>
+                        <button class="btn btn-secondary" type="button" data-action="export" data-group-index="${groupIndex}" style="font-size:0.85rem;padding:6px 12px;background:linear-gradient(135deg,#10b981,#059669);border:none" title="ייצוא לאקסל">📥</button>
+                    </div>
+                </td>
             `;
             tableBody.appendChild(row);
+
+            // כפתור ייצוא לנבחן בודד
+            const exportBtn = row.querySelector('[data-action="export"]');
+            if(exportBtn){
+                exportBtn.addEventListener('click', ()=>{
+                    if(window.scoresExport && typeof window.scoresExport.exportCandidate === 'function'){
+                        window.scoresExport.exportCandidate(group);
+                    } else {
+                        alert('מודול הייצוא אינו זמין');
+                    }
+                });
+            }
 
             const detailRow = document.createElement('tr');
             detailRow.className = 'scores-detail-row';

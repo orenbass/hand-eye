@@ -2,9 +2,11 @@
 // Dynamic configuration resolver for Eye-Hand Coordination test
 export function getEyeHandConfig(){
   const base = (window.getTestConfig? window.getTestConfig('eyehand'): null) || {};
+  console.log('[eyehand.config] base from getTestConfig:', JSON.stringify(base));
   const hebDiff = base.difficulty || 'בינוני';
   const diffMap = { 'קל':'easy', 'בינוני':'medium', 'קשה':'hard' };
   const difficulty = diffMap[hebDiff] || 'medium';
+  console.log('[eyehand.config] hebDiff:', hebDiff, '-> difficulty:', difficulty);
   // Duration from settings (seconds)
   const durationMs = (base.seconds? Math.max(5,+base.seconds):30) * 1000;
   // Path width adjusted by difficulty

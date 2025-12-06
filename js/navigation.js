@@ -28,6 +28,9 @@
     function switchTo(test){
         // יציאה ממצב מסך מלא כשעוברים בין מסכים
         exitFullscreenMode();
+        if(test==='admin' && window.testAuth && typeof window.testAuth.exitPreviewMode === 'function'){
+            window.testAuth.exitPreviewMode();
+        }
         
         document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
         if(test==='eyehand') document.getElementById('welcome-screen').classList.add('active');
@@ -55,7 +58,7 @@
         });
         const adminBtn=document.getElementById('admin-button');
         adminBtn && adminBtn.addEventListener('click',()=>{
-            if (window.testAuth && window.testAuth.isAdmin()) {
+            if (window.testAuth && window.testAuth.hasAdminAccess && window.testAuth.hasAdminAccess()) {
                 switchTo('admin');
             } else {
                 alert('נדרשת הרשאת מנהל לגישה להגדרות');
@@ -146,9 +149,10 @@
     window.initDynamicNav=initDynamicNav;
     window.addEventListener('settings-updated', ()=>{ 
         const adminActive = !!document.getElementById('admin-screen')?.classList.contains('active');
+        const introActive = document.getElementById('general-intro-screen')?.style.display === 'flex';
         initDynamicNav(); 
         hideExcludedScreens(); 
-        if(adminActive) return; // אל תחליף מסך כשנמצאים בהגדרות
+        if(adminActive || introActive) return; // אל תחליף מסך כשנמצאים בהגדרות או במסך הקדמה
         selectFirstIncluded(false); 
     });
     
