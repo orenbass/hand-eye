@@ -199,6 +199,26 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     }
   }
 
+  function showReviewUI(show, options = {}){
+    const headerEl = document.getElementById('flightexam-review-header');
+    const titleEl = document.getElementById('flightexam-review-title');
+    const footerEl = document.getElementById('flightexam-review-footer');
+    
+    if(show){
+      if(headerEl){
+        headerEl.style.display = 'flex';
+        if(titleEl) titleEl.textContent = options.title || 'השוואת מסלול';
+      }
+      if(footerEl){
+        footerEl.style.display = 'block';
+        footerEl.textContent = options.footerText || '';
+      }
+    } else {
+      if(headerEl) headerEl.style.display = 'none';
+      if(footerEl) footerEl.style.display = 'none';
+    }
+  }
+
   const planeIcon = new Image();
   let planeIconLoaded = false;
   planeIcon.onload = () => { planeIconLoaded = true; };
@@ -1226,67 +1246,55 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           }
         }
         
-        // Top banner with score
+        // Use HTML header/footer instead of drawing on canvas
         const storedScore = partScores[currentPart];
         const partScore = typeof storedScore === 'number'? storedScore : score;
         const practiceReview = isPracticePart(currentPart);
-        ctx.fillStyle = 'rgba(30, 41, 59, 0.92)';
-        ctx.fillRect(0, 0, canvas.width, 100);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 28px system-ui';
-        ctx.textAlign = 'center';
-        ctx.fillText(practiceReview? 'השוואת מסלול תרגול' : 'השוואת מסלול', canvas.width / 2, 35);
-        
-        ctx.font = '18px system-ui';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText('כחול = מסלול מקורי | ירוק = המסלול שלך', canvas.width / 2, 65);
-        
         const adminView = isAdminMode();
-        if(adminView){
-          ctx.font = 'bold 20px system-ui';
-          ctx.fillStyle = practiceReview? '#facc15' : '#60a5fa';
-          const label = practiceReview? 'דיוק תרגול (לא משוקלל): ' : 'דיוק: ';
-          ctx.fillText(`${label}${partScore.toFixed(1)}%`, canvas.width / 2, 90);
-        }
         
-        // Bottom instructions
+        // Calculate remaining time
         const elapsed = (Date.now() - reviewStartTime) / 1000;
         const holdDuration = practiceReview ? Math.max(30, REVIEW_AUTO_SEC) : REVIEW_AUTO_SEC;
         const remaining = Math.max(0, holdDuration - elapsed);
         
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.fillRect(0, canvas.height - 70, canvas.width, 70);
+        // Build title with optional score for admin
+        let title = practiceReview ? 'השוואת מסלול תרגול' : 'השוואת מסלול';
+        if(adminView){
+          const label = practiceReview ? 'דיוק תרגול: ' : 'דיוק: ';
+          title += ` | ${label}${partScore.toFixed(1)}%`;
+        }
         
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '20px system-ui';
-        ctx.textAlign = 'center';
-        
+        // Build footer text
+        let footerText = '';
         if(practiceReview){
-          ctx.fillText('המסלול שלך מוצג למשך 30 שניות להשוואה. לחץ Enter לעבור מיד למבחן האמיתי.', canvas.width / 2, canvas.height - 35);
+          footerText = `המסלול שלך מוצג למשך ${remaining.toFixed(0)} שניות להשוואה. לחץ Enter לעבור מיד למבחן האמיתי.`;
           if(remaining <= 0){
             console.log('[flightexam] Practice review time elapsed – opening transition');
             finalizeReview();
           }
         } else if(currentPart < partsRef.length - 1){
-          ctx.fillText(`מעבר לחלק הבא בעוד ${remaining.toFixed(1)} שניות | לחץ Enter לדלג`, canvas.width / 2, canvas.height - 35);
+          footerText = `מעבר לחלק הבא בעוד ${remaining.toFixed(0)} שניות | לחץ Enter לדלג`;
           if(remaining <= 0){
             console.log('[flightexam] REVIEW time expired, advancing');
             finalizeReview();
           }
         } else {
-          ctx.fillText(`סיום המבחן בעוד ${remaining.toFixed(1)} שניות | לחץ Enter לסיים עכשיו`, canvas.width / 2, canvas.height - 35);
+          footerText = `סיום המבחן בעוד ${remaining.toFixed(0)} שניות | לחץ Enter לסיים עכשיו`;
           if(remaining <= 0){
             console.log('[flightexam] REVIEW time expired, finishing');
             finalizeReview();
           }
         }
+        
+        // Update HTML UI
+        showReviewUI(true, { title, footerText });
       } else {
         // Loading review images
         ctx.fillStyle = '#ffffff';
         ctx.font = '22px system-ui';
         ctx.textAlign = 'center';
         ctx.fillText('מכין השוואה...', canvas.width / 2, canvas.height / 2);
+        showReviewUI(false);
       }
     }
     if(!hudUsed){
@@ -1334,6 +1342,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function finalizeReview(forceEnd){
     if(!reviewActive && !forceEnd) return;
     reviewActive=false;
+    showReviewUI(false); // Hide review UI when leaving review stage
     const currentIsPractice = isPracticePart(currentPart);
     const nextPartIndex = currentPart + 1;
     const nextPart = partsRef[nextPartIndex];
@@ -1371,6 +1380,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     active=false; 
     clearInterval(timerId);
     hideHud();
+    showReviewUI(false); // Hide review UI when exam ends
     if(window.practiceBanner) window.practiceBanner.hide();
     setStageMessage('מבחן הטסה הסתיים.');
     

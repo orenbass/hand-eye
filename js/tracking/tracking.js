@@ -135,13 +135,27 @@ import { computeTrackingScores } from './tracking.scoring.js';
             console.log('[tracking] reloadConfig:', { mode: currentMode, duration: this.duration/1000, speed: this.speed });
         }
         createNumberBox(){
-            const container = this.canvas && this.canvas.parentElement;
-            if(!container) return;
+            // יצירת תיבת המספרים ב-header slot - עם מרווח משמאל לשעון
+            const slot = document.getElementById('tracking-number-slot');
+            if(!slot) return;
             if(this.numberBoxEl) this.numberBoxEl.remove();
+            
+            // מרווח מהשעון - margin-right בRTL מזיז שמאלה
+            slot.style.cssText = 'margin-left:40px;';
+            
+            // תיבה גדולה עם מספר בולט
             const box=document.createElement('div');
-            box.style.cssText=`position:absolute;left:-260px;top:50%;transform:translateY(-50%);width:220px;height:220px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:20px;box-shadow:0 15px 40px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;`;
-            const num=document.createElement('div'); num.id='tracking-number-display'; num.style.cssText='font-size:140px;font-weight:800;color:#fff;text-shadow:0 4px 12px rgba(0,0,0,0.4);user-select:none;'; num.textContent='1';
-            box.appendChild(num); container.appendChild(box); this.numberBoxEl=box;
+            box.id='tracking-number-box';
+            box.style.cssText=`display:flex;align-items:center;justify-content:center;min-width:100px;height:auto;padding:10px 24px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,0.3);`;
+            
+            const num=document.createElement('div'); 
+            num.id='tracking-number-display'; 
+            num.style.cssText='font-size:80px;font-weight:800;color:#fff;text-shadow:0 4px 10px rgba(0,0,0,0.4);user-select:none;line-height:1;'; 
+            num.textContent='1';
+            
+            box.appendChild(num); 
+            slot.appendChild(box); 
+            this.numberBoxEl=box;
         }
         updateNumberDisplay(){
             if(!this.running) return; const display=document.getElementById('tracking-number-display'); if(!display||!this.numberBoxEl) return; display.textContent=this.currentNumber;
@@ -155,23 +169,43 @@ import { computeTrackingScores } from './tracking.scoring.js';
         resize(){ 
             if(!this.canvas) return; 
             
-            // Calculate available space based on the main panel to avoid overlapping header/footer
-            const mainPanel = document.querySelector('.tracking-main-panel');
-            let availableHeight = window.innerHeight * 0.75;
-            let availableWidth = window.innerWidth * 0.9;
-
-            if (mainPanel) {
-                const rect = mainPanel.getBoundingClientRect();
-                if (rect.height > 100) {
-                    availableHeight = rect.height - 40; // padding
-                    availableWidth = rect.width - 40;
-                }
+            // חישוב הגובה הזמין בין הבאנר העליון לתחתון
+            const headerRow = document.querySelector('#tracking-screen .orientation-header-row');
+            const footerRow = document.querySelector('#tracking-screen .orientation-footer-row');
+            
+            let availableHeight = window.innerHeight * 0.70; // ברירת מחדל
+            
+            if (headerRow && footerRow) {
+                const headerRect = headerRow.getBoundingClientRect();
+                const footerRect = footerRow.getBoundingClientRect();
+                // הגובה הזמין = מתחתית הבאנר העליון עד ראש הפוטר, פחות padding
+                availableHeight = footerRect.top - headerRect.bottom - 40;
             }
-
-            const size=Math.floor(Math.min(availableWidth, availableHeight)); 
-            this.canvas.width=size; this.canvas.height=size; this.canvas.style.width=size+'px'; this.canvas.style.height=size+'px'; 
-            const minDim=size; this.target.r=Math.max(30, Math.min(60, Math.round(minDim * this.radiusFactor))); 
-            if(!this.running){ this.target.x=this.canvas.width/2; this.target.y=this.canvas.height/2; } 
+            
+            // הרוחב הזמין - תיבת המספרים עכשיו ב-header אז יש יותר מקום
+            const maxWidth = window.innerWidth - 80; // רווחי בטיחות מהצדדים
+            
+            // הקאנבס חייב להיות ריבוע - הגודל הוא המינימום בין הגובה הזמין לרוחב
+            const size = Math.floor(Math.min(availableHeight, maxWidth));
+            
+            // קביעת גודל הקאנבס - attributes לרזולוציה, style לתצוגה
+            this.canvas.width = size; 
+            this.canvas.height = size; 
+            // שימוש ב-setProperty עם priority כדי לדרוס כללי CSS
+            this.canvas.style.setProperty('width', size + 'px', 'important');
+            this.canvas.style.setProperty('height', size + 'px', 'important');
+            this.canvas.style.setProperty('min-width', size + 'px', 'important');
+            this.canvas.style.setProperty('min-height', size + 'px', 'important');
+            
+            // עדכן רדיוס היעד בהתאם לגודל
+            this.target.r = Math.max(30, Math.min(60, Math.round(size * this.radiusFactor))); 
+            
+            if(!this.running){ 
+                this.target.x = this.canvas.width / 2; 
+                this.target.y = this.canvas.height / 2; 
+            } 
+            
+            console.log('[tracking] resize: canvas size =', size, 'x', size, 'availableHeight=', availableHeight, 'maxWidth=', maxWidth);
         }
         bind(){
             const btn=document.getElementById('start-tracking-button');

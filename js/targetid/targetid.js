@@ -387,12 +387,27 @@ import { makeRng, spawnTarget } from './targetid.utils.js';
 
   function resize() {
     if(!canvas) return;
-    // Use 80% of height or width, whichever fits better, but keep it square
-    const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.75);
+    // חישוב דינמי של הגובה הפנוי בין הכותרת לפוטר
+    const headerRow = document.querySelector('#targetid-layout .orientation-header-row');
+    const footerRow = document.querySelector('#targetid-layout .orientation-footer-row');
+    
+    let availableHeight = window.innerHeight * 0.75; // ברירת מחדל
+    if(headerRow && footerRow) {
+      const headerRect = headerRow.getBoundingClientRect();
+      const footerRect = footerRow.getBoundingClientRect();
+      const topOfCanvas = headerRect.bottom;
+      const bottomOfCanvas = footerRect.top;
+      availableHeight = bottomOfCanvas - topOfCanvas - 40; // מרווח 40px
+    }
+    
+    // הקאנבס יהיה ריבוע - הגודל הוא המינימום בין הרוחב הזמין לגובה הזמין
+    const availableWidth = window.innerWidth * 0.9;
+    const size = Math.min(availableWidth, availableHeight);
+    
     canvas.width = size;
     canvas.height = size;
-    canvas.style.width = size + 'px';
-    canvas.style.height = size + 'px';
+    canvas.style.setProperty('width', size + 'px', 'important');
+    canvas.style.setProperty('height', size + 'px', 'important');
   }
 
   function setStatus(text, tone='info') {

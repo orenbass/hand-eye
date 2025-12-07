@@ -323,22 +323,28 @@ import { generateRandomMap, generateRandomMaps, loadMapImage } from './northfind
     const headerRow = document.querySelector('#northfind-screen .orientation-header-row');
     const footerRow = document.querySelector('#northfind-screen .orientation-footer-row');
     
-    // גובה האלמנטים העליונים והתחתונים
-    const headerHeight = headerRow ? headerRow.offsetHeight : 80;
-    const footerHeight = footerRow ? footerRow.offsetHeight : 100;
-    const padding = 40; // מרווח בטיחות
+    let availableHeight = window.innerHeight * 0.70; // ברירת מחדל
     
-    // הגובה הזמין לקאנבס
-    const availableHeight = window.innerHeight - headerHeight - footerHeight - padding;
+    if (headerRow && footerRow) {
+        const headerRect = headerRow.getBoundingClientRect();
+        const footerRect = footerRow.getBoundingClientRect();
+        // הגובה הזמין = מתחתית הבאנר העליון עד ראש הפוטר, פחות padding
+        availableHeight = footerRect.top - headerRect.bottom - 40;
+    }
+    
     const availableWidth = window.innerWidth - 40; // מרווח מהצדדים
     
     // הקאנבס יהיה ריבועי - לפי המימד הקטן יותר
     const size = Math.floor(Math.min(availableWidth, availableHeight));
     
+    // קביעת גודל הקאנבס - attributes לרזולוציה, style לתצוגה
     canvas.width = size; 
     canvas.height = size; 
-    canvas.style.width = size + 'px'; 
-    canvas.style.height = size + 'px'; 
+    // שימוש ב-setProperty עם priority כדי לדרוס כללי CSS
+    canvas.style.setProperty('width', size + 'px', 'important');
+    canvas.style.setProperty('height', size + 'px', 'important');
+    canvas.style.setProperty('min-width', size + 'px', 'important');
+    canvas.style.setProperty('min-height', size + 'px', 'important');
     canvas.style.background = 'transparent';
     
     // המפה קטנה יותר כדי לתת מקום לחיצים מסביב (החיצים בערך 30px מסביב)

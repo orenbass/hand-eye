@@ -1,7 +1,7 @@
 // Simon-style Memory Test Module
-import { getMemoryConfig } from './memory.config.js';
+import { getMemoryConfig, loadMemoryConfigFromDB, clearMemoryConfigCache } from './memory.config.js';
 import { sleep } from './memory.utils.js';
-import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
+import { computeMemoryScore } from './memory.scoring.js';
 
 (function(){
     const PAD_COLORS = [
@@ -26,6 +26,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.nodes = [];
             this.sequence = [];
             this.userIndex = 0;
+            this.totalCorrectColors = 0; // סה"כ צבעים נכונים במבחן
             this.maxAchieved = 0;
             this.lives = 0;
             this.maxLives = 0;
@@ -38,10 +39,15 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.countdownTimer = null;
             this.countdownRemaining = 0;
             this.config = null;
-            this.timeLimitMs = 0;
-            this.retryDelaySec = 10;
             this.startTime = 0;
             this.prePracticeShown = false;
+            
+            // Practice tracking
+            this.practiceRunsComplete = 0;
+            
+            // Real test tracking
+            this.examRunsComplete = 0;
+            this.examScores = []; // ציונים מכל ניסיון
 
             this.bind();
         }
@@ -49,15 +55,30 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
         bind(){
             const btn = document.getElementById('start-memory-button');
             if(btn) {
-                btn.addEventListener('click', ()=> {
-                    this.reloadConfig();
-                    // Check if practice is enabled in config (default true)
-                    const practiceEnabled = this.config.practiceEnabled !== false;
-                    if (practiceEnabled && !this.prePracticeShown) {
+                btn.addEventListener('click', async ()=> {
+                    // ניקוי cache וטעינת הגדרות ישירות מה-DB
+                    clearMemoryConfigCache();
+                    console.log('[memory] 🔄 טוען הגדרות ישירות מ-DB...');
+                    
+                    try {
+                        await loadMemoryConfigFromDB();
+                    } catch(e) {
+                        console.warn('[memory] ❌ שגיאה בטעינת הגדרות מ-DB:', e);
+                    }
+                    
+                    this.reloadConfig(true);
+                    console.log('[memory] ⚙️ הגדרות שנטענו:', JSON.stringify(this.config));
+                    
+                    // בדיקה אם יש תרגול
+                    const practiceRuns = this.config.practiceRuns || 0;
+                    console.log('[memory] 🎯 practiceRuns:', practiceRuns, 'examRuns:', this.config.examRuns);
+                    
+                    if (practiceRuns > 0 && !this.prePracticeShown) {
                         this.prePracticeShown = true;
                         this.showPrePracticeModal(() => this.startPractice());
                     } else {
-                        this.startPractice();
+                        // ללא תרגול - ישר למבחן
+                        this.startRealTest();
                     }
                 });
             }
@@ -260,7 +281,6 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
         startPractice(){
             if(this.mode==='real' || this.mode==='countdown' || this.mode==='done') return;
-            if(this.mode==='practice' && !this.practiceDone) return;
 
             if(window.enterFullscreenMode) window.enterFullscreenMode();
 
@@ -276,38 +296,55 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.updateLayoutState();
             this.practiceDone = false;
             this.setPadMode('practice');
-            this.setBanner('תרגול - הציון לא נשמר', 'practice');
+            
+            // מספר החיים בתרגול = practiceRuns (כמו examRuns במבחן)
+            const totalLives = this.config.practiceRuns ?? 1;
+            if(totalLives > 1){
+                this.setBanner(`תרגול - ${totalLives} חיים`, 'practice');
+            } else {
+                this.setBanner('תרגול - ניסיון יחיד', 'practice');
+            }
+            
             this.setCountdown(null);
             this.clearCountdown();
 
             this.clearPendingTimers();
-            this.reloadConfig();
+            // טען הגדרות מחדש (רק בהתחלה)
+            if(this.practiceRunsComplete === 0){
+                this.reloadConfig(true);
+            }
+            
+            // בתרגול - מספר החיים = practiceRuns
+            this.lives = this.config.practiceRuns ?? 1;
+            this.maxLives = this.lives;
+            this.maxAchieved = 0;
+            this.totalCorrectColors = 0;
+            this.sequence = [];
+            this.userIndex = 0;
+            
             this.cooldownToken++;
             this.phase='idle';
             this.setStatus('מצב תרגול: עקבו אחרי הרצף. הציון לא נשמר.', 'info');
 
             this.updateStatsVisibility();
+            this.updateStats();
 
             this.startTime = performance.now();
-            this.timeLimitMs = this.practiceDurationMs;
             this.startTimer();
 
             this.beginAttempt();
         }
 
-        _runPracticeStartLogic() {
-            // Deprecated - logic moved back to startPractice
-        }
-
-        finishPractice(reason, showMessage=true){
+        finishPractice(reason){
             this.clearPendingTimers();
             this.cooldownToken++;
             this.clearCountdown();
             this.setCountdown(null);
             clearInterval(this.timerId);
             this.timerId = null;
-            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים
+            this.clearAllNodeEffects();
 
+            // התרגול הסתיים (נגמרו החיים או הזמן)
             this.phase='practice-complete';
             this.practiceDone = true;
             this.mode='practice';
@@ -315,23 +352,18 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.userIndex = 0;
             this.updateStats();
             this.setPadMode('practice');
-            this.setBanner(null); // Hide banner
+            this.setBanner(null);
             this.updateStatsVisibility();
 
-            if(showMessage){
-                this.setStatus('', 'muted');
-                this.showPracticeModal(()=>this.startRealTest());
-            }
-        }
-
-        startRealCountdown(){
-            // Deprecated - logic moved to showPracticeModal
-            this.startRealTest();
+            this.setStatus('', 'muted');
+            this.showPracticeModal(()=>this.startRealTest());
         }
 
         startRealTest(){
             this.clearPendingTimers();
             this.clearCountdown();
+            clearInterval(this.timerId);
+            this.timerId = null;
 
             // Re-attach HUDs
             if(window.timerHUD && window.timerHUD.attach) {
@@ -345,34 +377,69 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.updateLayoutState();
             this.practiceDone = true;
             this.setPadMode('real');
-            this.setBanner('מבחן אמיתי - הציון יימדד', 'real');
+            
+            const totalLives = this.config.examRuns ?? 1;
+            if(totalLives > 1){
+                this.setBanner(`מבחן אמיתי - ${totalLives} חיים`, 'real');
+            } else {
+                this.setBanner('מבחן אמיתי - ניסיון יחיד', 'real');
+            }
             this.setCountdown(null);
 
             if(window.enterFullscreenMode) window.enterFullscreenMode();
 
-            this.reloadConfig();
+            // טען הגדרות מחדש (רק בניסיון הראשון)
+            if(this.examRunsComplete === 0){
+                this.reloadConfig(true);
+            }
+            
+            // במבחן אמיתי - מספר החיים = examRuns (כמות הניסיונות המוגדרת)
+            this.lives = this.config.examRuns ?? 1;
+            this.maxLives = this.lives;
+            this.maxAchieved = 0;
+            this.totalCorrectColors = 0;
+            this.sequence = [];
+            this.userIndex = 0;
+            this.updateStats();
+            
             this.cooldownToken++;
             this.phase='idle';
+            
             this.setStatus('צפו ברצף והקישו את הצבעים באותו סדר', 'muted');
 
             this.updateStatsVisibility();
 
-            this.startTime = performance.now();
-            this.startTimer();
             this.beginAttempt();
         }
 
-        reloadConfig(){
+        reloadConfig(resetAll = true){
             this.config = getMemoryConfig();
-            this.retryDelaySec = this.config.retryDelaySec || 10;
-            this.maxLives = this.config.maxLives || 3;
+            console.log('[memory] 🔧 reloadConfig - config:', JSON.stringify(this.config));
+            
+            // לקחת ערכים ישירות מהקונפיג - ללא ברירות מחדל שדורסות!
+            this.maxLives = this.config.maxLives; // כבר יש ברירת מחדל ב-config
             this.lives = this.maxLives;
             this.maxAchieved = 0;
+            this.totalCorrectColors = 0;
             this.sequence = [];
             this.userIndex = 0;
-            this.timeLimitMs = (this.config.seconds || 120) * 1000;
-            this.practiceDurationMs = this.config.practiceDurationMs || 45000;
-            this.examCountdownSec = (typeof this.config.examCountdownSec === 'number') ? this.config.examCountdownSec : 5;
+            this.practiceDurationMs = this.config.practiceDurationMs; // ערך מה-DB
+            this.examCountdownSec = this.config.examCountdownSec; // ערך מה-DB
+            this.examRetryDelaySec = this.config.examRetryDelaySec; // ערך מה-DB
+            
+            console.log('[memory] 📊 ערכים אחרי reloadConfig:', {
+                practiceRuns: this.config.practiceRuns,
+                practiceDurationMs: this.practiceDurationMs,
+                examRuns: this.config.examRuns,
+                examCountdownSec: this.examCountdownSec,
+                examRetryDelaySec: this.examRetryDelaySec
+            });
+            
+            if(resetAll){
+                this.examRunsComplete = 0;
+                this.examScores = [];
+                this.practiceRunsComplete = 0;
+            }
             this.updateStats();
         }
 
@@ -380,6 +447,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.phase='show';
             this.sequence = [];
             this.userIndex = 0;
+            // התחל מצבע אחד
             this.generateNextStep();
             this.playSequence();
         }
@@ -394,7 +462,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             this.clearPendingTimers();
             this.phase='show';
             this.userIndex=0;
-            this.setStatus('שימו לב לרצף הצבעים', 'muted');
+            this.setStatus('שימו לב לרצף הצבעים, הקלק בקליק שמאלי עם העכבר על הרצף שהוצג, לפי סדר', 'muted');
 
             let delay = 600;
             this.sequence.forEach(idx=>{
@@ -408,7 +476,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             const readyId = setTimeout(()=>{
                 if(this.phase==='done') return;
                 this.phase='input';
-                this.setStatus('לחצו לפי הסדר שהופיע', 'pending');
+                this.setStatus('לחצו לפי הסדר שהופיע באמצעות קליק שמאלי של העכבר', 'pending');
             }, delay + 150);
             this.timeoutIds.push(readyId);
         }
@@ -422,7 +490,13 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             const expected = this.sequence[this.userIndex];
             if(index===expected){
                 this.userIndex++;
+                // ספור צבע נכון (רק במבחן אמיתי)
+                if(this.mode === 'real'){
+                    this.totalCorrectColors++;
+                }
+                
                 if(this.userIndex===this.sequence.length){
+                    // סיימנו את הרצף בהצלחה - מוסיפים את כל הצבעים שברצף
                     this.maxAchieved = Math.max(this.maxAchieved, this.sequence.length);
                     this.updateStats();
                     this.phase='transition';
@@ -447,49 +521,52 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
         async handleFailure(){
             this.clearPendingTimers();
+            this.clearAllNodeEffects(); // ניקוי הכפתור הדולק
             if(this.phase==='done') return;
             this.phase='cooldown';
             this.lives = Math.max(0, this.lives-1);
             this.updateStats();
 
             if(this.mode==='practice'){
-                if(this.lives>0){
-                    this.setStatus(`טעות בתרגול... ניסיון נוסף יתחיל בעוד ${this.retryDelaySec} שניות`, 'error');
-                    await this.startCooldown();
-                } else {
+                // בתרגול - אם נגמרו החיים, סיום התרגול
+                if(this.lives <= 0){
                     this.finishPractice('lives');
+                } else {
+                    // יש עוד חיים - מתחילים מחדש מהתחלה
+                    this.setStatus(`טעות בתרגול... מתחילים מחדש`, 'error');
+                    setTimeout(() => {
+                        this.clearAllNodeEffects();
+                        this.beginAttempt();
+                    }, 1500);
                 }
                 return;
             }
 
-            // מבחן אמיתי
-            if(this.lives>0){
-                this.setStatus(`טעות... ניסיון נוסף יתחיל בעוד ${this.retryDelaySec} שניות`, 'error');
-                await this.startCooldown();
+            // מבחן אמיתי - אם נגמרו החיים, סיום הניסיון
+            if(this.lives <= 0){
+                this.finishCurrentRun();
             } else {
-                // אין יותר חיים - סיום מיידי
-                this.setStatus('', 'muted');
-                this.finish(false);
+                // יש עוד חיים - מתחילים מחדש מהתחלה
+                this.setStatus(`טעות... נשארו ${this.lives} חיים. מתחילים מחדש`, 'error');
+                setTimeout(() => {
+                    this.clearAllNodeEffects();
+                    this.beginAttempt();
+                }, 1500);
             }
         }
 
-        async startCooldown(){
-            const token = ++this.cooldownToken;
-            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים מיד
-            let remaining = this.retryDelaySec;
-            while(remaining>0 && token===this.cooldownToken && this.phase==='cooldown'){
-                const label = this.mode==='practice' ? 'בתרגול' : 'במבחן';
-                this.setStatus(`ניסיון נוסף ${label} יתחיל בעוד ${remaining} שניות`, 'pending');
-                await sleep(1000);
-                remaining--;
-            }
-            if(token!==this.cooldownToken || this.phase==='done') return;
-            if(this.phase!=='cooldown') return;
-            const readyMsg = this.mode==='practice'
-                ? 'הנה הרצף החדש לתרגול – שימו לב!'
-                : 'הנה הרצף החדש – שימו לב!';
-            this.setStatus(readyMsg, 'muted');
-            this.beginAttempt();
+        // סיום המבחן האמיתי (נגמרו החיים)
+        finishCurrentRun(){
+            this.clearPendingTimers();
+            this.cooldownToken++;
+            this.clearAllNodeEffects();
+            
+            // חישוב ציון סופי
+            const score = computeMemoryScore(this.totalCorrectColors);
+            this.examScores.push(score);
+            
+            // סיום המבחן
+            this.finish();
         }
 
         flashNode(index, cls='active', duration=450){
@@ -511,23 +588,38 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
         startTimer(){
             clearInterval(this.timerId);
-            if(this.mode!=='real' && this.mode!=='practice') return;
+            if(this.mode!=='practice') return; // הטיימר רק לתרגול
+            this.startTime = performance.now();
+            
+            // עדכון ראשוני של הטיימר
+            const totalSec = Math.ceil(this.practiceDurationMs / 1000);
+            if(window.timerHUD && window.timerHUD.update){
+                const m = Math.floor(totalSec / 60);
+                const s = totalSec % 60;
+                window.timerHUD.update(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+            }
+            
             this.timerId=setInterval(()=>{
                 if(this.phase==='done') return;
                 const elapsed = performance.now() - this.startTime;
-                if(elapsed>=this.timeLimitMs){
-                    if(this.mode==='practice'){
-                        this.setStatus('זמן התרגול הסתיים', 'info');
-                        this.finishPractice('time');
-                    } else {
-                        this.setStatus('הזמן הסתיים', 'error');
-                        this.finish(true);
-                    }
+                const remainingMs = Math.max(0, this.practiceDurationMs - elapsed);
+                const remainingSec = Math.ceil(remainingMs / 1000);
+                
+                // עדכון תצוגת הטיימר
+                if(window.timerHUD && window.timerHUD.update){
+                    const m = Math.floor(remainingSec / 60);
+                    const s = remainingSec % 60;
+                    window.timerHUD.update(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
+                }
+                
+                if(elapsed>=this.practiceDurationMs){
+                    this.setStatus('זמן התרגול הסתיים', 'info');
+                    this.finishPractice('time');
                 }
             }, 300);
         }
 
-        finish(timeExpired){
+        finish(){
             if(this.phase==='done') return;
             this.phase='done';
             this.mode='done';
@@ -537,7 +629,7 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
             clearInterval(this.timerId);
             this.timerId=null;
             this.setCountdown(null);
-            this.clearAllNodeEffects(); // ניקוי אפקטים מהכפתורים
+            this.clearAllNodeEffects();
             this.toggleRealStartButton(false);
             this.setBanner('המבחן האמיתי הסתיים', 'real');
             this.setPadMode('done');
@@ -545,18 +637,28 @@ import { computeMemoryRawScore, scaleMemoryScore } from './memory.scoring.js';
 
             this.updateStats();
 
-            const raw = computeMemoryRawScore(this.maxAchieved, this.config.maxSequenceForScale);
-            const scaleRange = window.getGlobalScale ? window.getGlobalScale() : { min:1, max:7 };
-            const scaled = scaleMemoryScore(raw, scaleRange);
+            // חישוב ציון סופי - ממוצע כל הניסיונות
+            let finalScore;
+            if(this.examScores.length > 0){
+                const sum = this.examScores.reduce((a, b) => a + b, 0);
+                finalScore = sum / this.examScores.length;
+            } else {
+                // אם לא היו ניסיונות שלמים, חשב מהמצב הנוכחי
+                finalScore = computeMemoryScore(this.totalCorrectColors);
+            }
+            
+            // raw score for backward compatibility (0-100)
+            const raw = Math.round((finalScore / 7) * 100);
 
             if(window.testAuth){
-                window.testAuth.showTestCompleteModal('memory', scaled.toFixed(2));
+                window.testAuth.showTestCompleteModal('memory', finalScore.toFixed(2));
             }
             if(window.testsCore){
-                window.testsCore.completeTest('memory', raw, scaled, {
+                window.testsCore.completeTest('memory', raw, finalScore, {
+                    totalCorrectColors: this.totalCorrectColors,
                     maxAchieved: this.maxAchieved,
-                    timeExpired: !!timeExpired,
-                    attemptsUsed: (this.maxLives - this.lives)
+                    examRuns: this.examRunsComplete,
+                    examScores: this.examScores
                 });
             }
         }

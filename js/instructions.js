@@ -144,6 +144,10 @@
       const startBtn = instr.querySelector('.start-test-btn');
       if(startBtn){
         startBtn.addEventListener('click', () => {
+          // הכנס למסך מלא אם לא במסך מלא
+          if(window.examLock && !window.testAuth?.isAdmin()){
+            window.examLock.forceFullscreen();
+          }
           instr.style.display = 'none';
           test.style.display = 'block';
         }, { once: true });
@@ -177,9 +181,22 @@
     });
   }
 
+  // הוספת מאזין גלובלי לכל כפתורי התחלת מבחן - להכנס למסך מלא
+  function setupGlobalFullscreenOnStart(){
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.start-test-btn, #start-button, [data-start-test]');
+      if(btn && window.examLock && !window.testAuth?.isAdmin()){
+        console.log('[instructions] Start button clicked, forcing fullscreen');
+        // חייב להיות סינכרוני עם ה-click event
+        await window.examLock.enterFullscreen();
+      }
+    }, true); // capture phase - לפני כל ה-handlers האחרים
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     setupLegacyStructure();
     setupInstructionsButtons();
     cleanupOldOverlays();
+    setupGlobalFullscreenOnStart();
   });
 })();

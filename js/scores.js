@@ -4,6 +4,10 @@
     const screen = document.getElementById('scores-screen');
     const backBtn = document.getElementById('scores-back-button');
     const refreshBtn = document.getElementById('scores-refresh-button');
+    const feedbackStatsBtn = document.getElementById('feedback-stats-button');
+    const feedbackStatsPanel = document.getElementById('feedback-stats-panel');
+    const advancedStatsBtn = document.getElementById('advanced-stats-button');
+    const advancedStatsPanel = document.getElementById('advanced-stats-panel');
     const tableBody = document.getElementById('scores-table-body');
     const statusEl = document.getElementById('scores-status');
     const detailModal = document.getElementById('score-detail-modal');
@@ -14,6 +18,8 @@
 
     let previousScreen = null;
     const candidateAttemptsCache = new Map();
+    let feedbackStatsPanelVisible = false;
+    let advancedStatsPanelVisible = false;
 
     const ensureAdmin = ()=>{
         if(!window.testAuth) return false;
@@ -32,6 +38,58 @@
 
     if(backBtn) backBtn.addEventListener('click', hideScoresScreen);
     if(refreshBtn) refreshBtn.addEventListener('click', loadScores);
+    
+    // Feedback stats button
+    if(feedbackStatsBtn && feedbackStatsPanel) {
+        feedbackStatsBtn.addEventListener('click', async ()=>{
+            feedbackStatsPanelVisible = !feedbackStatsPanelVisible;
+            // Hide advanced stats if showing feedback stats
+            if(feedbackStatsPanelVisible && advancedStatsPanelVisible) {
+                advancedStatsPanelVisible = false;
+                if(advancedStatsPanel) advancedStatsPanel.style.display = 'none';
+                if(advancedStatsBtn) advancedStatsBtn.textContent = '📈 פילוח ציונים';
+            }
+            
+            if(feedbackStatsPanelVisible) {
+                feedbackStatsPanel.style.display = 'block';
+                feedbackStatsBtn.textContent = '📋 הסתר סטטיסטיקות משוב';
+                // Load feedback stats
+                if(window.feedbackStats) {
+                    await window.feedbackStats.loadResponses();
+                    window.feedbackStats.renderStatsPanel('feedback-stats-container');
+                }
+            } else {
+                feedbackStatsPanel.style.display = 'none';
+                feedbackStatsBtn.textContent = '📋 סטטיסטיקות משוב';
+            }
+        });
+    }
+    
+    // Advanced stats button - פילוח ציונים
+    if(advancedStatsBtn && advancedStatsPanel) {
+        advancedStatsBtn.addEventListener('click', async ()=>{
+            advancedStatsPanelVisible = !advancedStatsPanelVisible;
+            // Hide feedback stats if showing advanced stats
+            if(advancedStatsPanelVisible && feedbackStatsPanelVisible) {
+                feedbackStatsPanelVisible = false;
+                if(feedbackStatsPanel) feedbackStatsPanel.style.display = 'none';
+                if(feedbackStatsBtn) feedbackStatsBtn.textContent = '📋 סטטיסטיקות משוב';
+            }
+            
+            if(advancedStatsPanelVisible) {
+                advancedStatsPanel.style.display = 'block';
+                advancedStatsBtn.textContent = '📈 הסתר פילוח ציונים';
+                // Load advanced stats
+                if(window.feedbackStats) {
+                    await window.feedbackStats.renderAdvancedStatsPanel('advanced-stats-container');
+                }
+            } else {
+                advancedStatsPanel.style.display = 'none';
+                advancedStatsBtn.textContent = '📈 פילוח ציונים';
+            }
+        });
+    }
+    
     if(detailCloseBtn && detailModal){
         detailCloseBtn.addEventListener('click', ()=> hideModal(detailModal));
         detailModal.addEventListener('click', evt=>{ if(evt.target === detailModal) hideModal(detailModal); });
@@ -47,7 +105,7 @@
             const style = window.getComputedStyle(sc);
             if(style.display !== 'none') return sc;
         }
-        return null;
+        return null;;
     }
 
     function showScoresScreen(){

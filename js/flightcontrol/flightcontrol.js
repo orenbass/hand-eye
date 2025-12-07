@@ -1,6 +1,6 @@
 import { getFlightControlConfig } from './flightcontrol.config.js';
 import { computeFlightControlRaw, scaleFlightControl } from './flightcontrol.scoring.js';
-import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.utils.js';
+import { fmtTime, maxRadius, noiseValue, resetNoise, setNoiseSpeed, changeDirection } from './flightcontrol.utils.js';
 
 (function(){
   const btn=document.getElementById('start-flightcontrol');
@@ -243,7 +243,7 @@ import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.util
     }
     if(window.timerHUD) window.timerHUD.hide();
     
-    setStatus('מבחן אמיתי: שמור את הסמן קרוב ככל האפשר למרכז.', 'info');
+    setStatus('מבחן אמיתי: שמור את הסמן קרוב ככל האפשר למרכז באמצעות החצים שבמקלדת.', 'info');
     updateStatsVisibility();
     startRun('real');
   }
@@ -253,8 +253,9 @@ import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.util
     cfg = getFlightControlConfig();
     console.log('[flightcontrol] startRun - mode:', targetMode, 'cfg:', JSON.stringify(cfg));
     
-    // איפוס מצב הרעש למבחן חדש
+    // איפוס מצב הרעש והגדרת מהירות לפי רמת קושי
     resetNoise();
+    setNoiseSpeed(cfg.difficulty);
     
     if (window.enterFullscreenMode) window.enterFullscreenMode();
     resize();
@@ -280,26 +281,35 @@ import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.util
     const headerRow = document.querySelector('#flightcontrol-screen .orientation-header-row');
     const footerRow = document.querySelector('#flightcontrol-screen .orientation-footer-row');
     
-    // גובה האלמנטים העליונים והתחתונים
-    const headerHeight = headerRow ? headerRow.offsetHeight : 80;
-    const footerHeight = footerRow ? footerRow.offsetHeight : 100;
-    const padding = 40; // מרווח בטיחות
+    let availableHeight = window.innerHeight * 0.70; // ברירת מחדל
     
-    // הגובה הזמין לקאנבס
-    const availableHeight = window.innerHeight - headerHeight - footerHeight - padding;
+    if (headerRow && footerRow) {
+        const headerRect = headerRow.getBoundingClientRect();
+        const footerRect = footerRow.getBoundingClientRect();
+        // הגובה הזמין = מתחתית הבאנר העליון עד ראש הפוטר, פחות padding
+        availableHeight = footerRect.top - headerRect.bottom - 40;
+    }
+    
     const availableWidth = window.innerWidth - 40; // מרווח מהצדדים
     
     // הקאנבס יהיה ריבועי - לפי המימד הקטן יותר
     const size = Math.floor(Math.min(availableWidth, availableHeight));
     
+    // קביעת גודל הקאנבס - attributes לרזולוציה, style לתצוגה
     canvas.width = size;
     canvas.height = size;
-    canvas.style.width = size + 'px';
-    canvas.style.height = size + 'px';
+    // שימוש ב-setProperty עם priority כדי לדרוס כללי CSS
+    canvas.style.setProperty('width', size + 'px', 'important');
+    canvas.style.setProperty('height', size + 'px', 'important');
+    canvas.style.setProperty('min-width', size + 'px', 'important');
+    canvas.style.setProperty('min-height', size + 'px', 'important');
+    
     if(canvas.width < 50){ setTimeout(resize,120); return; }
     canvas.style.display='block';
     CX = size/2;
     CY = size/2;
+    
+    console.log('[flightcontrol] resize - size:', size, 'availableHeight:', availableHeight);
   }
 
   resize();
@@ -319,7 +329,8 @@ import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.util
         window.timerHUD.update(`${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`);
     }
 
-    const n=noiseValue(performance.now()/1000, cfg.difficulty);
+    // קבלת וקטור התזוזה - הכיוון נשאר קבוע עד שהמשתמש משחרר מקש
+    const n=noiseValue();
 
     cursor.x += n.x*dt + ((keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0))*cfg.speed*dt;
     cursor.y += n.y*dt + ((keys.ArrowDown?1:0)-(keys.ArrowUp?1:0))*cfg.speed*dt;
@@ -390,6 +401,10 @@ import { fmtTime, maxRadius, noiseValue, resetNoise } from './flightcontrol.util
     if(e.key in keys || ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       keys[e.key]=false;
       e.preventDefault();
+      // כשהמשתמש משחרר מקש חץ - שינוי כיוון התזוזה
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && running){
+        changeDirection();
+      }
     }
   });
 

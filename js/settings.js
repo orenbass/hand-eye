@@ -14,10 +14,11 @@
       scaleMin:1,
       scaleMax:7,
       reactionShapeDisplaySec:1, // משך הופעת כל צורה במבחן תגובה (שניות)
+      feedbackEnabled: true, // האם להציג משוב בסוף המבחנים
       tests:[
         {id:'eyehand', name:'תיאום עין-יד', include:true, seconds:30, difficulty:'בינוני'},
         {id:'reaction', name:'זמן תגובה', include:true, seconds:40, difficulty:'בינוני'},
-        {id:'memory', name:'זיכרון צבעים', include:true, seconds:60, difficulty:'בינוני'},
+        {id:'memory', name:'זיכרון צבעים', include:true}, // הגדרות נטענות ישירות מ-DB
         {id:'tracking', name:'מעקב וקשב', include:true, seconds:30, difficulty:'בינוני'},
         {id:'northfind', name:'מציאת הצפון', include:true, seconds:45, difficulty:'בינוני'},
         {id:'flightcontrol', name:'בקרת טיסה', include:true, seconds:60, difficulty:'בינוני'},
@@ -177,7 +178,19 @@
 
     // מחיקת הגדרות מקומיות בטעינה - תמיד עובדים מול השרת
     (function clearLocalSettingsOnLoad(){
-      const keysToRemove = [LS_KEY, LS_NORTH, LS_FLIGHTEXAM, LS_NEWEXAM_OLD, LS_ORIENTATION];
+      const keysToRemove = [
+        LS_KEY, LS_NORTH, LS_FLIGHTEXAM, LS_NEWEXAM_OLD, LS_ORIENTATION,
+        // מחיקת הגדרות סקשן מקומיות - הכל נטען מ-DB
+        'app.settings.section.memory',
+        'app.settings.section.eyehand',
+        'app.settings.section.reaction',
+        'app.settings.section.tracking',
+        'app.settings.section.northfind',
+        'app.settings.section.flightcontrol',
+        'app.settings.section.targetid',
+        'app.settings.section.orientation',
+        'app.settings.section.flightexam'
+      ];
       keysToRemove.forEach(key => {
         if(localStorage.getItem(key)){
           console.log('[settings] 🗑️ מוחק הגדרות מקומיות:', key);
@@ -539,12 +552,11 @@
               'reactionExamCountdownSec': 'examCountdownSec',
               'reactionEnablePractice': 'enablePractice',
               // Memory
-              'memorySeconds': 'seconds',
-              'memoryDifficulty': 'difficulty',
               'memoryPracticeRuns': 'practiceRuns',
               'memoryPracticeSeconds': 'practiceSeconds',
               'memoryExamCountdownSec': 'examCountdownSec',
-              'memoryEnablePractice': 'enablePractice',
+              'memoryExamRuns': 'examRuns',
+              'memoryExamRetryDelaySec': 'examRetryDelaySec',
               // Tracking
               'trackingSeconds': 'seconds',
               'trackingDifficulty': 'difficulty',
@@ -595,7 +607,7 @@
               console.log(`[settings:${testId}] 🔄 מיפוי: ${key} -> ${configKey}, ערך: ${value}`);
               
               // המר ערכים מספריים
-              if(['seconds', 'practiceRuns', 'practiceSeconds', 'examCountdownSec', 'trials', 'learnSec', 'spinSec', 'answerSec'].includes(configKey)){
+              if(['seconds', 'practiceRuns', 'practiceSeconds', 'examCountdownSec', 'examRuns', 'examRetryDelaySec', 'trials', 'learnSec', 'spinSec', 'answerSec'].includes(configKey)){
                 const numValue = Number(value);
                 console.log(`[settings:${testId}] 📊 ערך מספרי: ${configKey} = ${numValue}`);
                 testConfig[configKey] = numValue || testConfig[configKey];
@@ -763,19 +775,32 @@
       if(!window.supabaseClient) throw new Error('Supabase לא מאותחל');
       const table=getTestSectionTable(testId);
       if(!table) throw new Error('לא נמצאה טבלה עבור המבחן');
-      const record={ id: TEST_SECTION_ROW_ID, payload };
+      console.log(`[settings:${testId}] 🔄 שומר לטבלה ${table}:`, JSON.stringify(payload));
+      
+      // הוסף timestamp לכל שמירה כדי לעדכן את updated_at
+      const record={ 
+        id: TEST_SECTION_ROW_ID, 
+        payload,
+        updated_at: new Date().toISOString()
+      };
+      
       let query=window.supabaseClient
         .from(table)
         .upsert(record, { onConflict: 'id' })
         .select('updated_at');
       const exec=query.maybeSingle? query.maybeSingle(): query.single();
       const { data, error } = await exec;
-      if(error) throw error;
+      if(error){
+        console.error(`[settings:${testId}] ❌ שגיאה בשמירה:`, error);
+        throw error;
+      }
+      console.log(`[settings:${testId}] ✅ נשמר בהצלחה:`, data);
       return data && data.updated_at ? data.updated_at : null;
     }
 
     function setTestSectionStatus(testId, text, tone){
       const binding=testSectionBindings[testId];
+      console.log(`[settings:${testId}] 📌 setTestSectionStatus:`, text, tone, '| binding:', !!binding, '| statusEl:', !!(binding && binding.statusEl));
       if(!binding || !binding.statusEl) return;
       const colors={ info:'#94a3b8', success:'#10b981', warn:'#f97316', error:'#ef4444' };
       binding.statusEl.textContent=text;
@@ -786,6 +811,7 @@
       const data={};
       if(!section) return data;
       const fields=section.querySelectorAll('input, select, textarea');
+      console.log('[settings] 🔍 collectSectionValues - נמצאו', fields.length, 'שדות');
       fields.forEach(el=>{
         if(!el || !el.id) return;
         if(el.dataset && (el.dataset.persist==='ignore' || el.dataset.testSettingsIgnore==='true')) return;
@@ -798,7 +824,9 @@
         } else {
           data[el.id]=el.value;
         }
+        console.log(`[settings] 📝 שדה: ${el.id} = ${data[el.id]}`);
       });
+      console.log('[settings] 📦 payload סופי:', JSON.stringify(data));
       return data;
     }
 
@@ -917,8 +945,12 @@
         if(window.supabaseClient){
           updatedAt=await saveTestSectionRemote(testId, payload);
           mode='remote';
-          const ts=updatedAt? new Date(updatedAt).toLocaleTimeString('he-IL') : '';
-          setTestSectionStatus(testId, ts? `✅ נשמר ב-Supabase (${ts})` : '✅ נשמר ב-Supabase', 'success');
+          console.log(`[settings:${testId}] 🕐 updatedAt מ-DB:`, updatedAt);
+          // השתמש בשעה הנוכחית אם אין תשובה מה-DB
+          const displayTime = updatedAt 
+            ? new Date(updatedAt).toLocaleTimeString('he-IL')
+            : new Date().toLocaleTimeString('he-IL');
+          setTestSectionStatus(testId, `✅ נשמר ב-Supabase (${displayTime})`, 'success');
         } else {
           persistTestSectionLocal(testId, payload);
           setTestSectionStatus(testId, '⚠️ נשמר מקומית בלבד (אופליין)', 'warn');
@@ -1108,6 +1140,26 @@
               </thead>
               <tbody id="testsOrderConfig"></tbody>
             </table>
+            
+            <!-- שורת הגדרות משוב -->
+            <div id="feedback-settings-row" style="margin-top:16px;padding:14px 16px;background:linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.12));border:2px solid rgba(16,185,129,0.35);border-radius:12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span style="font-size:1.3rem">📋</span>
+                  <span style="font-weight:600;color:#e2e8f0;font-size:1rem">שאלון משוב</span>
+                  <label class="toggle-switch" style="margin:0">
+                    <input type="checkbox" id="cfgFeedbackEnabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                  <span id="feedback-status-text" style="font-size:0.9rem;color:#10b981;font-weight:500">מופעל</span>
+                </div>
+                <button id="preview-feedback-btn" class="btn" type="button" style="background:#8b5cf6;color:#fff;padding:10px 18px;font-size:0.9rem;border-radius:10px;font-weight:600;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
+                  👁️ תצוגה מקדימה
+                </button>
+              </div>
+              <p style="font-size:0.82rem;color:#94a3b8;margin:10px 0 0">שאלון משוב יוצג לנבחנים בסיום כל המבחנים (אם מופעל)</p>
+            </div>
+            
             <div class="general-tests-actions" style="display:flex;gap:12px;align-items:center;margin-top:16px;flex-wrap:wrap;">
               <button id="btnSaveGeneralTests" type="button" class="btn" style="background:#0ea5e9;color:#fff;padding:10px 20px;border-radius:10px;font-weight:600;box-shadow:0 4px 12px rgba(14,165,233,0.25);">
                 💾 שמור סדר וכלילת מבחנים
@@ -1360,35 +1412,38 @@
   
           <!-- Memory Test Settings -->
           <div class="settings-section section-memory" data-tab-section="memory" style="display:none">
-            <h3>מבחן זיכרון צבעים</h3>
+            <h3>מבחן זיכרון צבעים (סיימון)</h3>
+            <p style="color:#94a3b8;font-size:0.9rem;margin-bottom:16px">
+              המבחן ממשיך עד שנגמרים החיים (3). הציון נקבע לפי סה"כ צבעים שנזכרו נכון.<br>
+              סקאלה: 0-35=1, 36-44=2, 45-54=3, 55-65=4, 66-77=5, 78-90=6, 91+=7
+            </p>
             <div class="form-grid">
-              <div class="form-group">
-                <label for="memorySeconds">משך המבחן (שניות)</label>
-                <input id="memorySeconds" type="number" min="5" max="600" value="60">
-                <span class="form-hint">זמן מקסימלי למבחן</span>
-              </div>
-              <div class="form-group">
-                <label for="memoryDifficulty">רמת קושי</label>
-                <select id="memoryDifficulty">
-                  <option>קל</option>
-                  <option selected>בינוני</option>
-                  <option>קשה</option>
-                </select>
-                <span class="form-hint">משפיע על אורך הרצפים</span>
-              </div>
-              <h4 style="margin-top:20px;margin-bottom:10px;grid-column:1/-1">הגדרות תרגול</h4>
+              <h4 style="margin-bottom:10px;grid-column:1/-1">הגדרות תרגול</h4>
               <div class="form-group">
                 <label for="memoryPracticeRuns">כמות ניסיונות תרגול</label>
-                <input id="memoryPracticeRuns" type="number" min="1" max="10" value="1">
+                <input id="memoryPracticeRuns" type="number" min="0" max="10" value="1">
+                <span class="form-hint">0 = ללא תרגול, עובר ישר למבחן</span>
               </div>
               <div class="form-group">
-                <label for="memoryPracticeSeconds">זמן תרגול (שניות)</label>
+                <label for="memoryPracticeSeconds">זמן תרגול לכל ניסיון (שניות)</label>
                 <input id="memoryPracticeSeconds" type="number" min="5" max="300" value="45">
+                <span class="form-hint">התרגול נגמר כשהזמן עובר או שנגמרים החיים</span>
               </div>
               <div class="form-group">
                 <label for="memoryExamCountdownSec">המתנה למבחן (שניות)</label>
                 <input id="memoryExamCountdownSec" type="number" min="0" max="60" value="5">
                 <span class="form-hint">זמן המתנה מסיום התרגול ועד התחלת המבחן</span>
+              </div>
+              <h4 style="margin-top:20px;margin-bottom:10px;grid-column:1/-1">הגדרות מבחן אמיתי</h4>
+              <div class="form-group">
+                <label for="memoryExamRuns">כמות ניסיונות במבחן</label>
+                <input id="memoryExamRuns" type="number" min="1" max="5" value="1">
+                <span class="form-hint">אם יותר מ-1, הציון הסופי הוא ממוצע כל הניסיונות</span>
+              </div>
+              <div class="form-group">
+                <label for="memoryExamRetryDelaySec">המתנה בין ניסיונות (שניות)</label>
+                <input id="memoryExamRetryDelaySec" type="number" min="1" max="30" value="3">
+                <span class="form-hint">זמן המתנה אחרי נפילה עד לניסיון הבא</span>
               </div>
             </div>
           </div>
@@ -1907,12 +1962,28 @@
       const scaleMinEl=document.getElementById('cfgScaleMin');
       const scaleMaxEl=document.getElementById('cfgScaleMax');
       const reactionShapeSecEl=document.getElementById('cfgReactionShapeSec');
+      const feedbackEnabledEl=document.getElementById('cfgFeedbackEnabled');
+      const feedbackStatusText=document.getElementById('feedback-status-text');
+      
       if(scaleMinEl) scaleMinEl.value=settings.scaleMin;
       if(scaleMaxEl) scaleMaxEl.value=settings.scaleMax;
       if(reactionShapeSecEl) reactionShapeSecEl.value=settings.reactionShapeDisplaySec;
+      if(feedbackEnabledEl) feedbackEnabledEl.checked = settings.feedbackEnabled !== false;
+      
+      // עדכון טקסט סטטוס המשוב
+      function updateFeedbackStatus(){
+        if(feedbackStatusText){
+          const enabled = settings.feedbackEnabled !== false;
+          feedbackStatusText.textContent = enabled ? 'מופעל' : 'מבוטל';
+          feedbackStatusText.style.color = enabled ? '#10b981' : '#ef4444';
+        }
+      }
+      updateFeedbackStatus();
+      
       if(scaleMinEl) scaleMinEl.oninput=()=>{ settings.scaleMin=Math.max(1, +scaleMinEl.value||1); if(settings.scaleMin>=settings.scaleMax){ settings.scaleMax=settings.scaleMin+1; if(scaleMaxEl) scaleMaxEl.value=settings.scaleMax; } };
       if(scaleMaxEl) scaleMaxEl.oninput=()=>{ settings.scaleMax=Math.max(settings.scaleMin+1, +scaleMaxEl.value||7); scaleMaxEl.value=settings.scaleMax; };
       if(reactionShapeSecEl){ reactionShapeSecEl.oninput=()=>{ settings.reactionShapeDisplaySec=Math.max(0.2, Math.min(10, +reactionShapeSecEl.value||1)); reactionShapeSecEl.value=settings.reactionShapeDisplaySec; }; }
+      if(feedbackEnabledEl){ feedbackEnabledEl.onchange=()=>{ settings.feedbackEnabled = feedbackEnabledEl.checked; updateFeedbackStatus(); }; }
     }
   
     function syncNewExamTiming(){
@@ -3077,6 +3148,57 @@
         };
         input.click();
       };
+      
+      // כפתור תצוגה מקדימה של שאלון המשוב
+      const previewFeedbackBtn = document.getElementById('preview-feedback-btn');
+      if(previewFeedbackBtn) {
+        previewFeedbackBtn.onclick = () => {
+          startFeedbackPreview();
+        };
+      }
+    }
+    
+    // תצוגה מקדימה של שאלון המשוב
+    function startFeedbackPreview() {
+      console.log('[settings] Starting feedback preview');
+      
+      // בדיקה אם המודול נטען
+      if (!window.feedbackSurvey) {
+        console.log('[settings] Waiting for feedbackSurvey module...');
+        // נסה שוב אחרי 100ms
+        setTimeout(() => {
+          if (window.feedbackSurvey) {
+            startFeedbackPreview();
+          } else {
+            alert('❌ מודול המשוב לא נטען. נסה לרענן את הדף.');
+          }
+        }, 100);
+        return;
+      }
+      
+      // הסתר את כל הסקשנים
+      document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+      const container = document.querySelector('.container');
+      if(container) container.style.display = 'none';
+      
+      // הצג את סקשן המשוב
+      const feedbackSection = document.getElementById('feedback-section');
+      if (feedbackSection) {
+        feedbackSection.style.display = 'block';
+      }
+      
+      // אתחל את שאלון המשוב במצב תצוגה מקדימה
+      window.feedbackSurvey.init('feedback-container', 'preview-mode', () => {
+        // בסיום התצוגה המקדימה - חזרה למסך ההגדרות
+        if (feedbackSection) feedbackSection.style.display = 'none';
+        if(container) container.style.display = 'block';
+        
+        // הצג את מסך ההגדרות
+        const adminScreen = document.getElementById('admin-screen');
+        if(adminScreen) adminScreen.style.display = 'block';
+        
+        alert('✓ זו הייתה תצוגה מקדימה - התשובות לא נשמרו');
+      });
     }
 
     function setupUserManagement(){

@@ -31,6 +31,85 @@
         </div>
     </div>
 
+    <!-- System Check Screen -->
+    <div id="system-check-screen" class="login-overlay" style="display:none; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+        <div class="login-container" style="max-width: 600px;">
+            <div class="login-box" style="text-align: center; padding: 40px; width: 100%; max-width: 100%; background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(71, 85, 105, 0.5);">
+                <h2 style="color: #3b82f6; margin-bottom: 10px; font-size: 1.8rem;">בדיקת אמצעים</h2>
+                <p style="margin-bottom: 30px; color: #94a3b8; font-size: 1rem;">לפני שנתחיל, נבדוק שהציוד שלך תקין ומוכן למבחן.</p>
+
+                <!-- Progress Steps -->
+                <div class="check-steps" style="display: flex; justify-content: center; gap: 15px; margin-bottom: 35px;">
+                    <div class="check-step" id="step-mouse">
+                        <div class="step-circle">1</div>
+                        <span>עכבר</span>
+                    </div>
+                    <div class="check-step" id="step-camera">
+                        <div class="step-circle">2</div>
+                        <span>מצלמה</span>
+                    </div>
+                    <div class="check-step" id="step-keyboard">
+                        <div class="step-circle">3</div>
+                        <span>מקלדת</span>
+                    </div>
+                </div>
+
+                <!-- Step 1: Mouse Check -->
+                <div class="check-panel" id="panel-mouse">
+                    <div class="panel-icon">🖱️</div>
+                    <h3>בדיקת עכבר</h3>
+                    <p style="color: #94a3b8; margin-bottom: 25px;">יש ללחוץ על 5 מטרות שיופיעו בפינות המסך ובמרכזו.</p>
+                    <button id="start-mouse-check-btn" class="btn btn-primary" style="min-width: 200px;">התחל בדיקה</button>
+                </div>
+
+                <!-- Step 2: Camera Check -->
+                <div class="check-panel" id="panel-camera" style="display: none;">
+                    <div class="panel-icon">📷</div>
+                    <h3>בדיקת מצלמה</h3>
+                    <p style="color: #94a3b8; margin-bottom: 20px;">אנא אשר גישה למצלמה.</p>
+                    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                        <video id="camera-preview" autoplay playsinline muted style="width: 280px; height: 210px; background: #000; border-radius: 12px; object-fit: cover; border: 2px solid #334155;"></video>
+                    </div>
+                    <p id="camera-status" style="color: #94a3b8;">מחכה לאישור מצלמה...</p>
+                </div>
+
+                <!-- Step 3: Keyboard Check -->
+                <div class="check-panel" id="panel-keyboard" style="display: none;">
+                    <div class="panel-icon">⌨️</div>
+                    <h3>בדיקת מקלדת</h3>
+                    <p style="color: #94a3b8; margin-bottom: 25px;">לחץ על כל המקשים המסומנים.</p>
+                    <div class="keys-container">
+                        <div class="key-row">
+                            <div class="key-check" data-key="1">1</div>
+                            <div class="key-check" data-key="2">2</div>
+                            <div class="key-check" data-key="3">3</div>
+                            <div class="key-check" data-key="4">4</div>
+                        </div>
+                        <div class="key-row">
+                            <div class="key-check wide" data-key="Space">Space</div>
+                            <div class="key-check wide" data-key="Enter">Enter</div>
+                        </div>
+                        <div class="key-row arrows">
+                            <div class="key-check" data-key="ArrowUp">↑</div>
+                        </div>
+                        <div class="key-row arrows" dir="ltr">
+                            <div class="key-check" data-key="ArrowLeft">←</div>
+                            <div class="key-check" data-key="ArrowDown">↓</div>
+                            <div class="key-check" data-key="ArrowRight">→</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Final Button -->
+                <div id="check-complete-section" style="display: none; margin-top: 30px;">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">✅</div>
+                    <h3 style="color: #10b981; margin-bottom: 10px;">כל הבדיקות עברו בהצלחה!</h3>
+                    <button id="system-check-start-btn" class="btn btn-primary" style="padding: 15px 50px; font-size: 1.3rem; margin-top: 20px;">התחל במבחנים</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- General Intro Screen -->
     <div id="general-intro-screen" class="login-overlay" style="display:none; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
         <div class="login-container" style="max-width: 800px;">
@@ -45,21 +124,39 @@
                     <p style="margin-bottom: 15px;">
                         שלום רב,
                         <br>
-                        לפניך סדרת מבחנים הבודקת מגוון יכולות ומיומנויות.
+                        לפניך סדרת מבחנים הבוחנת מגוון רחב של יכולות ומיומנויות.
                     </p>
                     
                     <p style="margin-bottom: 15px;">
-                        משך המבחנים הכולל הוא כחצי שעה. חשוב לשמור על ריכוז גבוה ורציף לכל אורך המבחנים.
+                        כדי להצליח, חשוב לשמור על <u>ריכוז גבוה ורציף לכל אורך המבחנים</u>.
                     </p>
                     
                     <p style="margin-bottom: 15px;">
-                        לפני כל מבחן יופיע שלב תרגול קצר, שמטרתו לאפשר לך להכיר את המשימה ולהתנסות בה ללא ניקוד.
-                        <br>
-                        מומלץ לנצל שלב זה כדי להבין היטב מה נדרש לעשות.
+                        לפני כל מבחן יוצג שלב תרגול קצר, שמטרתו לאפשר לך להכיר את אופן הביצוע ולהתנסות בו ללא ניקוד. מומלץ לנצל את שלב התרגול כדי להבין היטב מה נדרש ולוודא שהמשימה ברורה.
                     </p>
                     
-                    <p style="margin-bottom: 30px; font-weight: 600;">
-                        יש לקרוא את ההוראות בתחילת כל מבחן בעיון רב.
+                    <p style="margin-bottom: 15px;">
+                        יש לקרוא בעיון את ההוראות המופיעות בתחילת כל מבחן.
+                    </p>
+
+                    <p style="margin-bottom: 15px;">
+                        המבחנים מיועדים לביצוע באמצעות <u>מחשב שולחני</u> או מחשב נייד בלבד.
+                    </p>
+
+                    <p style="margin-bottom: 15px;">
+                        הציוד הנדרש: מחשב עם חיבור <u>אינטרנט יציב</u>, <u>מסך תקין</u>, <u>מקלדת</u>, <u>עכבר</u> <u>ומצלמת מחשב פעילה</u>.
+                    </p>
+
+                    <p style="margin-bottom: 15px;">
+                        עם לחיצה על כפתור "התחל במבחנים", המצלמה תתחיל לעבוד.
+                    </p>
+
+                    <p style="margin-bottom: 30px;">
+                        עליך לבצע את המבחנים על שולחן פנוי מציוד נוסף, בחדר שקט, ללא אנשים נוספים וללא הפרעות.
+                    </p>
+
+                    <p style="margin-bottom: 30px; font-weight: 600; text-align: center; font-size: 1.3rem;">
+                        בהצלחה !
                     </p>
                 </div>
 
@@ -74,15 +171,20 @@
     <div id="test-complete-modal" class="modal-overlay" style="display:none">
         <div class="modal-content">
             <h2>✓ מבחן הושלם בהצלחה!</h2>
-            <p id="modal-test-name" class="modal-test-name"></p>
             <div class="modal-score">
                 <span class="modal-score-label">ציון:</span>
                 <span id="modal-score-value" class="modal-score-value">-</span>
             </div>
             <button id="next-test-button" class="btn btn-primary">המשך למבחן הבא</button>
             <button id="finish-all-button" class="btn btn-secondary" style="display:none">סיים את כל המבחנים</button>
+            <button id="go-to-feedback-button" class="btn btn-primary" style="display:none">מעבר לשאלון משוב</button>
         </div>
     </div>
+
+    <!-- Feedback Survey Section -->
+    <section id="feedback-section" class="screen" style="display:none">
+        <div id="feedback-container"></div>
+    </section>
 
         <!-- Detailed Attempt Modal -->
         <div id="score-detail-modal" class="modal-overlay" style="display:none">
@@ -309,7 +411,6 @@
                             <div class="orientation-main-panel memory-main-panel">
                                 <div class="test-area">
                                     <div id="memory-grid" class="memory-pad"></div>
-                                    <div id="memory-message" class="memory-message"></div>
                                     <div class="pretest-actions">
                                         <div id="memory-countdown" class="pretest-countdown" style="display:none" aria-live="polite"></div>
                                     </div>
@@ -319,7 +420,7 @@
                         <div class="orientation-footer-row">
                             <div class="orientation-footer-content memory-footer-content">
                                 <div class="orientation-footer-info memory-footer-info">
-                                    <div id="memory-status" class="pretest-status" style="text-align:center;font-weight:600;font-size:1rem"></div>
+                                    <div id="memory-message" class="memory-message" style="text-align:center;font-weight:600;font-size:1rem;margin-bottom:8px"></div>
                                 </div>
                                 <div id="memory-stats" class="test-stats" style="display:none">
                                     <div class="stat-row">
@@ -367,6 +468,7 @@
                             <div class="orientation-header-huds">
                                 <div id="tracking-practice-slot" class="orientation-header-slot orientation-header-slot-practice"></div>
                                 <div id="tracking-timer-slot" class="orientation-header-slot orientation-header-slot-timer"></div>
+                                <div id="tracking-number-slot" class="orientation-header-slot orientation-header-slot-number"></div>
                             </div>
                             <div class="orientation-header-topbtn"></div>
                         </div>
@@ -524,11 +626,12 @@
                     <div class="instructions-box">
                         <h3>מבחן ירי במטרות</h3>
                         <ul>
-                            <li>תחילה תרגל לזמן קצר ללא ניקוד כדי להתרגל לקצב המטרות</li>
-                            <li>בתרגול ובמבחן: פגע רק במטרות הירוקות והימנע מהאדומות</li>
-                            <li>לחיצה מוצלחת על ירוק מוסיפה נקודות; לחיצה על אדום מחסירה</li>
-                            <li>כשתסיים את התרגול, לחץ על "סיימתי תרגול – להתחיל מבחן אמיתי" וימתין לספירה לאחור של 10 שניות</li>
-                            <li>במבחן האמיתי הדיוק הכולל שלך קובע את הציון הסופי</li>
+                            <li>על המסך יופיעו עיגולים בצבעים ובמיקומים משתנים</li>
+                            <li>משימתך היא ללחוץ בלחיצה שמאלית (קליק) בעכבר על מרכז העיגולים הירוקים בלבד</li>
+                            <li>הדיוק והמהירות מהווים מרכיב מרכזי: פגיעה מהירה ומדויקת במרכז עיגול ירוק תעניק ניקוד</li>
+                            <li>החטאה, בחירה בצבע שאינו ירוק, או תגובה מאוחרת יפחיתו את הניקוד</li>
+                            <li>לחיצות מיותרות במקומות שאין בהם מטרה יורידו ציון</li>
+                            <li>יש לשמור על ריכוז רציף לכל אורך המבחן</li>
                         </ul>
                         <button id="start-targetid" class="btn btn-primary start-test-btn">התחל תרגול</button>
                     </div>
@@ -582,12 +685,12 @@
                     <div class="instructions-box">
                         <h3>מבחן הטסה</h3>
                         <ul>
-                            <li>בכל חלק מוצג תחילה המסלול עם הקו הכחול למשך זמן הלמידה שהוגדר (ברירת מחדל 15 שניות). בזמן זה אסור לגעת במקלדת – רק ללמוד את הנתיב.</li>
-                            <li>לאחר הלמידה תוצג ספירת התחלה קצרה (ברירת מחדל 10 שניות) בזמן שהמטוס מוצב בנקודת הזינוק.</li>
-                            <li>שלב הטיסה נמשך לפי משך המבחן שהוגדר (ברירת מחדל 60 שניות). סובב את המטוס באמצעות חיצים שמאל/ימין והחזק רווח כדי להתקדם קדימה.</li>
-                            <li>שחזר את המסלול בדיוק הגבוה ביותר עד לנקודת הסיום. ניתן להמשיך לטוס עד שהשעון העליון מסתיים או עד שתתקבל הוראה אחרת.</li>
-                            <li>החלק הראשון הוא תרגול ואינו נספר לציון. כרזת "מצב תרגול" בשורה העליונה תזכיר זאת. לאחר המעבר למבחן האמיתי לא ניתן לחזור לתרגול.</li>
-                            <li>לאחר התרגול לחץ על "סיימתי תרגול – להתחיל מבחן אמיתי" והבחינה תתחיל מיד.</li>
+                            <li>לפניך יוצג סרטון קצר המתאר מסלול טיסה מעל מפה. בזמן הצפייה אין לגעת במקלדת או בעכבר. מטרתך בשלב זה היא ללמוד ולזכור את נתיב הטיסה במלואו</li>
+                            <li>לאחר שהמסלול יסתיים, תופיע המפה ועליך יהיה להטיס את כלי הטיס באותו נתיב בדיוק כפי שהודגם בסרטון</li>
+                            <li>השליטה מתבצעת באמצעות חיצים שמאל וימין לסיבוב המטוס, ובאמצעות החזקת מקש הרווח להתקדמות קדימה</li>
+                            <li>מטרת המבחן היא לשחזר את הנתיב שלמדת ברמת הדיוק הגבוהה ביותר עד לנקודת הסיום</li>
+                            <li>הטיסה תסתיים בהגעה לנקודת הסיום או בסיום הזמן המופיע בשעון הטיימר</li>
+                            <li>אין אפשרות לחזור לאחור במהלך הטיסה</li>
                         </ul>
                         <button id="start-flightexam" class="btn btn-primary start-test-btn">התחל מבחן</button>
                     </div>
@@ -601,6 +704,10 @@
                             <div class="orientation-header-huds">
                                 <div id="flightexam-practice-slot" class="orientation-header-slot orientation-header-slot-practice"></div>
                                 <div id="flightexam-timer-slot" class="orientation-header-slot orientation-header-slot-timer"></div>
+                                <div id="flightexam-review-header" class="orientation-header-slot" style="display:none;flex-direction:column;align-items:center;padding:8px 16px;background:rgba(30,41,59,0.95);border-radius:12px;">
+                                    <span id="flightexam-review-title" style="font-size:1.2rem;font-weight:700;color:#fff;"></span>
+                                    <span id="flightexam-review-legend" style="font-size:0.85rem;color:#94a3b8;">כחול = מסלול מקורי | ירוק = המסלול שלך</span>
+                                </div>
                             </div>
                             <div class="orientation-header-topbtn"></div>
                         </div>
@@ -617,6 +724,7 @@
                             <div class="orientation-footer-content flightexam-footer-content">
                                 <div class="orientation-footer-info flightexam-footer-info">
                                     <p id="flightexam-stage-text">הטיסה תתחיל מיד לאחר טעינת המסלול.</p>
+                                    <p id="flightexam-review-footer" style="display:none;margin-top:8px;font-weight:600;color:#60a5fa;"></p>
                                 </div>
                                 <div id="flightexam-stats" class="test-stats" style="display:none">
                                     <div class="stat-row"><span>זמן נותר:</span><span id="flightexam-time">00:00</span></div>
@@ -651,16 +759,16 @@
                         <button id="orientation-real-start-button" class="btn btn-secondary" style="display:none">סיימתי תרגול – להתחיל מבחן אמיתי</button>
                         <div id="orientation-countdown" class="pretest-countdown" style="display:none" aria-live="polite"></div>
                     </div>
-                    <div id="orientation-status" class="pretest-status" style="text-align:center;margin-bottom:12px;font-weight:600;font-size:1rem"></div>
-                    <div class="orientation-hud" style="display:flex;justify-content:flex-end;margin-bottom:12px">
+                    <div id="orientation-status" class="pretest-status" style="text-align:center;margin-bottom:12px;font-weight:600;font-size:1rem;display:none"></div>
+                    <div class="orientation-hud" style="display:none;justify-content:flex-end;margin-bottom:12px">
                         <div id="orientation-timer-card" style="display:none;min-width:150px;padding:12px 18px;border-radius:14px;border:2px solid var(--accent-primary);background:rgba(15,23,42,0.8);color:#fff;text-align:center;box-shadow:0 10px 30px rgba(15,23,42,0.35);">
                             <div id="orientation-timer-label" style="font-size:0.85rem;font-weight:600;letter-spacing:0.05em;margin-bottom:4px">זמן</div>
                             <div id="orientation-timer-value" style="font-size:1.8rem;font-weight:800;line-height:1">--:--</div>
                         </div>
                     </div>
                     
-                    <div class="test-area">
-                        <div class="status" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+                    <div class="test-area" style="display:none">
+                        <div id="orientation-stats" class="status" style="display:none;gap:16px;flex-wrap:wrap;margin-bottom:16px">
                             <span class="pill">שאלה <span id="orient-progress">0/0</span></span>
                             <span class="pill">נכון: <span id="orient-correct">0</span></span>
                             <span class="pill">שגוי: <span id="orient-wrong">0</span></span>
@@ -797,6 +905,8 @@
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap">
                             <button id="scores-refresh-button" class="btn btn-secondary" type="button">↻ רענן נתונים</button>
+                            <button id="feedback-stats-button" class="btn btn-secondary" type="button">📋 סטטיסטיקות משוב</button>
+                            <button id="advanced-stats-button" class="btn btn-secondary" type="button">📈 פילוח ציונים</button>
                             <button id="scores-back-button" class="btn" type="button" style="background:#ef4444;color:#fff">חזרה למסך מבחנים</button>
                         </div>
                     </div>
@@ -817,6 +927,16 @@
                             <tbody id="scores-table-body" style="background:rgba(15,23,42,0.85);color:#e2e8f0"></tbody>
                         </table>
                     </div>
+                </div>
+                
+                <!-- Feedback Stats Panel -->
+                <div id="feedback-stats-panel" class="scores-panel" style="display:none;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.3);border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 20px 50px rgba(15,23,42,0.35);">
+                    <div id="feedback-stats-container"></div>
+                </div>
+                
+                <!-- Advanced Stats Panel - פילוח ציונים -->
+                <div id="advanced-stats-panel" class="scores-panel" style="display:none;background:rgba(15,23,42,0.9);border:1px solid rgba(148,163,184,0.3);border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 20px 50px rgba(15,23,42,0.35);">
+                    <div id="advanced-stats-container"></div>
                 </div>
             </section>
 
@@ -856,6 +976,8 @@
         </main>
     </div>
     
+    <script src="js/exam-lock.js?v=1.0"></script>
+    <script src="js/system-check.js?v=1.0"></script>
     <script src="js/data-service.js?v=1.0"></script>
     <script src="js/auth.js?v=2.0"></script>
     <script src="js/tests-core.js?v=2.0"></script>
@@ -878,6 +1000,8 @@
     <script src="js/targetid/targetid.js?v=2.0" type="module"></script>
     <script src="js/orientation/orientation.js?v=2.0" type="module"></script>
     <script src="js/flightexam/flightexam.js?v=1.0" type="module"></script>
+    <script src="js/feedback/feedback.js?v=1.0" type="module"></script>
+    <script src="js/feedback/feedback-stats.js?v=1.0" type="module"></script>
     <script src="js/theme.js?v=2.0"></script>
 </body>
 </html>

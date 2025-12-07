@@ -313,6 +313,10 @@
     function logout() {
         exitPreviewMode();
         resetSessionState();
+        
+        // שחרר נעילת מבחן אם קיימת
+        if(window.examLock) window.examLock.unlock();
+        
         localStorage.removeItem('currentUser');
         localStorage.removeItem('currentUserUuid');
         localStorage.removeItem('currentUserRecord');
@@ -323,6 +327,36 @@
         // הסתר ברכת שלום
         const greetingEl = document.getElementById('welcome-greeting');
         if(greetingEl) greetingEl.style.display = 'none';
+    }
+    
+    // התחלת שאלון המשוב
+    function startFeedbackSurvey() {
+        console.log('[auth] Starting feedback survey');
+        
+        // הסתר את כל הסקשנים
+        document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+        document.querySelector('.container').style.display = 'none';
+        
+        // הצג את סקשן המשוב
+        const feedbackSection = document.getElementById('feedback-section');
+        if (feedbackSection) {
+            feedbackSection.style.display = 'block';
+        }
+        
+        // אתחל את שאלון המשוב
+        const userId = localStorage.getItem('currentUserUuid');
+        if (window.feedbackSurvey) {
+            window.feedbackSurvey.init('feedback-container', userId, () => {
+                // בסיום המשוב - התנתק
+                if(window.examLock) window.examLock.unlock();
+                logout();
+                showLoginScreen();
+                
+                // הסתר את סקשן המשוב
+                if (feedbackSection) feedbackSection.style.display = 'none';
+                document.querySelector('.container').style.display = 'block';
+            });
+        }
     }
     
     function markTestCompleted(testName) {
@@ -399,7 +433,10 @@
         const nextBtn = document.getElementById('next-test-button');
         const finishBtn = document.getElementById('finish-all-button');
         
-        if (!modal) return;
+        if (!modal) {
+            console.warn('[auth] Modal not found, skipping showTestCompleteModal');
+            return;
+        }
         
         // שמות המבחנים בעברית
         const testNames = {
@@ -415,7 +452,9 @@
             'flightexam': 'מבחן הטסה'
         };
         
-        testNameEl.textContent = testNames[testName] || testName;
+        if (testNameEl) {
+            testNameEl.textContent = testNames[testName] || testName;
+        }
         // שמירת הציון פנימית (גם אם לא מוצג)
         testScores = testScores.filter(s=>s.id!==testName); testScores.push({id:testName, score:score}); localStorage.setItem('testScores', JSON.stringify(testScores));
         persistSession();
@@ -423,11 +462,15 @@
         const effectiveAdmin = isEffectiveAdmin();
         const previewActive = isPreviewMode();
         
+        // כפתור המעבר למשוב
+        const feedbackBtn = document.getElementById('go-to-feedback-button');
+        if (feedbackBtn) feedbackBtn.style.display = 'none';
+        
         if (!effectiveAdmin) {
             // הסתרת תיבת ציון למשתמש רגיל או במצב תצוגה
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='none';
         } else {
-            scoreEl.textContent = score;
+            if (scoreEl) scoreEl.textContent = score;
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='block';
         }
         
@@ -454,12 +497,26 @@
             nextBtn.style.display='block'; finishBtn.style.display='none';
             nextBtn.onclick=()=>{ modal.style.display='none'; if(window.switchTest) window.switchTest(nextTest); };
         } else {
-            // אין מבחן הבא => סיום כל המבחנים
-            nextBtn.style.display='none'; finishBtn.style.display='block';
-            if (!effectiveAdmin) {
-                finishBtn.textContent='סיים';
-                finishBtn.onclick=()=>{ logout(); modal.style.display='none'; showLoginScreen(); };
+            // אין מבחן הבא => סיום כל המבחנים - מעבר לשאלון משוב
+            nextBtn.style.display='none'; 
+            finishBtn.style.display='none';
+            
+            // בדיקה אם המשוב מופעל בהגדרות
+            const feedbackEnabledSetting = window.appSettings?.feedbackEnabled !== false;
+            
+            if (!effectiveAdmin && feedbackEnabledSetting) {
+                // משתמש רגיל ומשוב מופעל - הצג כפתור מעבר למשוב
+                if (feedbackBtn) {
+                    feedbackBtn.style.display = 'block';
+                    feedbackBtn.textContent = 'מעבר לשאלון משוב';
+                    feedbackBtn.onclick = () => {
+                        modal.style.display = 'none';
+                        startFeedbackSurvey();
+                    };
+                }
             } else {
+                // מנהל או משוב מבוטל - הצג כפתור סיום
+                finishBtn.style.display='block';
                 finishBtn.textContent='סיים';
                 finishBtn.onclick=()=>{ modal.style.display='none'; alert('כל המבחנים הושלמו!'); };
             }
@@ -487,11 +544,22 @@
         // Setup Intro Button
         const introStartBtn = document.getElementById('intro-start-btn');
         if(introStartBtn) {
+            introStartBtn.textContent = 'מעבר לבדיקת אמצעים';
             introStartBtn.addEventListener('click', () => {
                 hideIntroScreen();
-                selectFirstAvailable();
+                if(window.showSystemCheck) {
+                    window.showSystemCheck();
+                } else {
+                    // Fallback if system check module not loaded
+                    selectFirstAvailable();
+                }
             });
         }
+        
+        // Bind the callback for when system check is done
+        window.startTestsAfterCheck = () => {
+            selectFirstAvailable();
+        };
         
         if (!loginButton || !idInput || !pinInput) return;
         const defaultLabel = loginButton.textContent;
@@ -590,73 +658,102 @@
         // בדוק אם יש משתמש מחובר
         const savedUser = localStorage.getItem('currentUser');
         const savedAdmin = localStorage.getItem('isAdmin') === 'true';
-        const savedCompleted = localStorage.getItem('completedTests');
-        const savedScores = localStorage.getItem('testScores'); if(savedScores){ try{ testScores = JSON.parse(savedScores)||[]; }catch(e){ testScores=[]; } }
         const savedUuid = localStorage.getItem('currentUserUuid');
         const savedRecordRaw = localStorage.getItem('currentUserRecord');
-        const savedAttempts = localStorage.getItem('attemptCounts');
+        
         if(savedRecordRaw){ try{ currentUserRecord = JSON.parse(savedRecordRaw); }catch(e){ currentUserRecord = null; } }
-        if(savedAttempts){ try{ attemptCounts = JSON.parse(savedAttempts) || {}; }catch(e){ attemptCounts = {}; } } else { attemptCounts = {}; }
         
         if (savedUser) {
             currentUser = savedUser;
             currentUserUuid = savedUuid || null;
             isAdmin = savedAdmin;
-            if (savedCompleted) {
-                try { completedTests = new Set(JSON.parse(savedCompleted)); }
-                catch(e){ completedTests = new Set(); }
-            }
-            hideLoginScreen(); refreshTestOrder(); updateTestButtons(); hideUserStatsIfNeeded(); applyBodyMode();
-            updateWelcomeGreeting(); // הצג ברכת שלום אם יש משתמש מחובר
             
-            // רענן את המבחנים שהושלמו מהדאטאבייס (למקרה שהשתנו)
-            if(!isAdmin && savedUuid){
-                refreshCompletedTestsFromDb(savedUuid).then(()=>{
-                    updateTestButtons();
-                    selectFirstAvailable();
-                });
-            } else if(!isAdmin) {
-                selectFirstAvailable();
+            // אם מנהל - פשוט הכנס
+            if (isAdmin) {
+                hideLoginScreen(); 
+                refreshTestOrder(); 
+                updateTestButtons(); 
+                hideUserStatsIfNeeded(); 
+                applyBodyMode();
+                return;
             }
-        } else { showLoginScreen(); }
+            
+            // אם משתמש רגיל - בדוק מול DB אם יש לו מבחנים שהושלמו
+            hideLoginScreen();
+            refreshTestOrder();
+            updateTestButtons();
+            hideUserStatsIfNeeded();
+            applyBodyMode();
+            updateWelcomeGreeting();
+            
+            // תמיד בדוק מול DB - אם אין מבחנים מושלמים, חזור למסך פתיחה
+            if(savedUuid){
+                checkUserProgressFromDb(savedUuid).then((hasProgress)=>{
+                    if(hasProgress){
+                        // יש מבחנים שהושלמו - המשך מאיפה שעצרת
+                        updateTestButtons();
+                        selectFirstAvailable();
+                    } else {
+                        // אין מבחנים שהושלמו - הצג מסך פתיחה ובדיקת אמצעים
+                        showIntroScreen();
+                    }
+                });
+            } else {
+                // אין UUID - הצג מסך פתיחה
+                showIntroScreen();
+            }
+        } else { 
+            showLoginScreen(); 
+        }
         
         setupLoginForm();
         setupLogoutButton();
     }
     
-    // פונקציה פנימית לרענון מבחנים שהושלמו מהדאטאבייס
-    async function refreshCompletedTestsFromDb(userId){
-        if(!userId) return;
+    // פונקציה לבדיקת התקדמות משתמש מה-DB
+    async function checkUserProgressFromDb(userId){
+        if(!userId) return false;
         const service = window.examData;
-        if(!service) return;
+        if(!service) return false;
         
         // המתן שה-Supabase יהיה מוכן
         const isReady = typeof service.isReady === 'function' ? service.isReady() : true;
         if(!isReady){
-            console.log('[auth] Supabase not ready, skipping refresh');
-            return;
+            console.log('[auth] Supabase not ready, waiting...');
+            // נסה להמתין קצת
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
         try {
             // טען את ה-attempts של המשתמש מהדאטאבייס
             if(typeof service.fetchUserAttempts === 'function'){
                 const attempts = await service.fetchUserAttempts(userId);
+                
+                // נקה מצב קודם
+                completedTests = new Set();
+                attemptCounts = {};
+                testScores = [];
+                
                 attempts.forEach(att=>{
                     if(!att || !att.test_id) return;
                     completedTests.add(att.test_id);
                     const idx = att.attempt_index || 1;
                     attemptCounts[att.test_id] = Math.max(attemptCounts[att.test_id] || 0, idx);
                     if(typeof att.scaled_score === 'number'){
-                        testScores = testScores.filter(s=>s.id!==att.test_id);
                         testScores.push({ id: att.test_id, score: att.scaled_score });
                     }
                 });
-                console.log('[auth] Refreshed completed tests from DB:', [...completedTests]);
+                console.log('[auth] Loaded from DB - completed tests:', [...completedTests]);
+                
+                // עדכון localStorage (לצורך שמירה זמנית בלבד)
                 persistSession();
+                
+                return completedTests.size > 0;
             }
         } catch(err){
-            console.warn('[auth] refreshCompletedTestsFromDb failed', err);
+            console.warn('[auth] checkUserProgressFromDb failed', err);
         }
+        return false;
     }
     
     // חשיפת API גלובלי
