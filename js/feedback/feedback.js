@@ -251,6 +251,8 @@ class FeedbackSurvey {
 
         try {
             await this.saveToDatabase();
+            // סימון המשתמש כמי שסיים את כל המבחנים
+            await this.markUserAsCompleted();
             this.renderThankYou();
         } catch (error) {
             console.error('[feedback] Error saving:', error);
@@ -269,6 +271,27 @@ class FeedbackSurvey {
             document.getElementById('feedback-retry-btn').addEventListener('click', () => {
                 this.submit();
             });
+        }
+    }
+
+    async markUserAsCompleted() {
+        if (!window.supabaseClient || !this.userId || this.userId === 'preview-mode') {
+            return;
+        }
+        
+        try {
+            const { error } = await window.supabaseClient
+                .from('exam_users')
+                .update({ all_tests_done: true })
+                .eq('id', this.userId);
+            
+            if (error) {
+                console.warn('[feedback] Failed to mark user as completed:', error);
+            } else {
+                console.log('[feedback] User marked as completed all tests');
+            }
+        } catch (err) {
+            console.warn('[feedback] Error marking user as completed:', err);
         }
     }
 
@@ -309,8 +332,42 @@ class FeedbackSurvey {
         `;
 
         document.getElementById('feedback-exit-btn').addEventListener('click', () => {
+            console.log('[feedback] Exit button clicked');
+            
+            // הסתר את סקשן המשוב
+            const feedbackSection = document.getElementById('feedback-section');
+            if (feedbackSection) {
+                feedbackSection.style.display = 'none';
+                console.log('[feedback] Hidden feedback section');
+            }
+            
+            // הצג את ה-container הראשי
+            const container = document.querySelector('.container');
+            if (container) {
+                container.style.display = 'block';
+                console.log('[feedback] Shown container');
+            }
+            
+            // הצג את מסך ההתחברות
+            const loginScreen = document.getElementById('login-screen');
+            if (loginScreen) {
+                loginScreen.style.display = 'flex';
+                console.log('[feedback] Shown login screen');
+            }
+            
             if (this.onComplete) {
+                console.log('[feedback] Calling onComplete callback');
                 this.onComplete();
+            } else {
+                console.log('[feedback] No onComplete callback, performing manual logout');
+                // אם אין callback - בצע התנתקות ידנית
+                if (window.testAuth && typeof window.testAuth.logout === 'function') {
+                    window.testAuth.logout();
+                }
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('currentUserUuid');
+                localStorage.removeItem('currentUserRecord');
+                localStorage.removeItem('isAdmin');
             }
         });
     }

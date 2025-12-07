@@ -18,7 +18,7 @@
       tests:[
         {id:'eyehand', name:'תיאום עין-יד', include:true, seconds:30, difficulty:'בינוני'},
         {id:'reaction', name:'זמן תגובה', include:true, seconds:40, difficulty:'בינוני'},
-        {id:'memory', name:'זיכרון צבעים', include:true}, // הגדרות נטענות ישירות מ-DB
+        {id:'memory', name:'זיכרון צבעים', include:true, difficulty:'קשה'}, // הגדרות נטענות ישירות מ-DB
         {id:'tracking', name:'מעקב וקשב', include:true, seconds:30, difficulty:'בינוני'},
         {id:'northfind', name:'מציאת הצפון', include:true, seconds:45, difficulty:'בינוני'},
         {id:'flightcontrol', name:'בקרת טיסה', include:true, seconds:60, difficulty:'בינוני'},
@@ -557,6 +557,8 @@
               'memoryExamCountdownSec': 'examCountdownSec',
               'memoryExamRuns': 'examRuns',
               'memoryExamRetryDelaySec': 'examRetryDelaySec',
+              'memoryDifficultyAdvanced': 'difficulty',
+              'memoryDifficulty': 'difficulty',
               // Tracking
               'trackingSeconds': 'seconds',
               'trackingDifficulty': 'difficulty',
@@ -1096,6 +1098,7 @@
               <button id="exportSettings" class="save-settings-btn save-bar-btn" type="button">⬇ הורד הגדרות (JSON)</button>
               <button id="exportSettingsZip" class="save-settings-btn save-bar-btn" type="button">🗜 הורד ZIP</button>
               <button id="importSettingsFile" class="save-settings-btn save-bar-btn" type="button">📂 טען קובץ הגדרות</button>
+              <button id="openScoringGuide" class="save-settings-btn save-bar-btn" type="button">📘 הסבר ניקוד</button>
               <span id="saveStatus" class="save-status" aria-live="polite"></span>
             </div>
             <div class="admin-layout-grid">
@@ -1439,6 +1442,15 @@
                 <label for="memoryExamRuns">כמות ניסיונות במבחן</label>
                 <input id="memoryExamRuns" type="number" min="1" max="5" value="1">
                 <span class="form-hint">אם יותר מ-1, הציון הסופי הוא ממוצע כל הניסיונות</span>
+              </div>
+              <div class="form-group">
+                <label for="memoryDifficulty">רמת קושי</label>
+                <select id="memoryDifficulty">
+                  <option value="קל">קל</option>
+                  <option value="בינוני">בינוני</option>
+                  <option value="קשה" selected>קשה</option>
+                </select>
+                <span class="form-hint">קובע את ההטייה לציון: בינוני = ‎+1, קל = ‎+2</span>
               </div>
               <div class="form-group">
                 <label for="memoryExamRetryDelaySec">המתנה בין ניסיונות (שניות)</label>
@@ -3041,6 +3053,7 @@
       const exportBtn=document.getElementById('exportSettings');
       const exportZipBtn=document.getElementById('exportSettingsZip');
       const importBtn=document.getElementById('importSettingsFile');
+      const scoringGuideBtn=document.getElementById('openScoringGuide');
       const saveStatusEl=document.getElementById('saveStatus');
       if(saveBtn) saveBtn.onclick=async ()=>{
         console.log('[settings] validating images before save...');
@@ -3148,6 +3161,11 @@
         };
         input.click();
       };
+      if(scoringGuideBtn){
+        scoringGuideBtn.onclick=()=>{
+          window.open('scoring-guide.html','_blank','noopener');
+        };
+      }
       
       // כפתור תצוגה מקדימה של שאלון המשוב
       const previewFeedbackBtn = document.getElementById('preview-feedback-btn');

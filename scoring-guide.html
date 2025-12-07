@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הסבר על שיטת הניקוד</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body.guide-body {
+      font-family: "Assistant", "Segoe UI", Tahoma, sans-serif;
+      background:#0f172a;
+      color:#e2e8f0;
+      margin:0;
+      padding:0;
+    }
+    .guide-shell{
+      max-width:960px;
+      margin:0 auto;
+      padding:40px 24px 80px;
+    }
+    .guide-header{
+      text-align:center;
+      margin-bottom:32px;
+    }
+    .guide-header h1{
+      margin:0;
+      font-size:2rem;
+    }
+    .guide-header p{
+      margin:12px 0 0;
+      color:#94a3b8;
+    }
+    .guide-actions{
+      display:flex;
+      gap:12px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:20px;
+    }
+    .guide-actions button{
+      border:1px solid rgba(148,163,184,0.4);
+      background:rgba(15,23,42,0.6);
+      color:#f8fafc;
+      padding:10px 18px;
+      border-radius:999px;
+      cursor:pointer;
+      font-size:0.95rem;
+    }
+    section.guide-card{
+      border:1px solid rgba(148,163,184,0.2);
+      border-radius:18px;
+      padding:24px;
+      margin-bottom:20px;
+      background:rgba(15,23,42,0.75);
+      box-shadow:0 10px 40px rgba(15,23,42,0.45);
+    }
+    section.guide-card h2{
+      margin:0 0 12px;
+      font-size:1.35rem;
+      color:#facc15;
+    }
+    .guide-list{
+      margin:0;
+      padding-inline-start:20px;
+      line-height:1.6;
+    }
+    .guide-table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:12px;
+    }
+    .guide-table th,
+    .guide-table td{
+      border:1px solid rgba(148,163,184,0.3);
+      padding:8px;
+      text-align:center;
+    }
+    .guide-table th{
+      background:rgba(248,250,252,0.06);
+    }
+    .guide-note{
+      color:#94a3b8;
+      font-size:0.9rem;
+      margin-top:10px;
+    }
+    @media(max-width:600px){
+      .guide-shell{padding:24px 16px 60px;}
+      section.guide-card{padding:18px;}
+    }
+  </style>
+</head>
+<body class="guide-body">
+  <div class="guide-shell">
+    <header class="guide-header">
+      <h1>שיטת הניקוד בכל המבחנים</h1>
+      <p>המסמך מסביר כיצד נגזר הציון הגולמי (0-100) וכיצד הוא מומר לסקאלה הגלובלית (ברירת מחדל: 1–7).</p>
+      <div class="guide-actions">
+        <button type="button" onclick="window.history.back()">⬅ חזרה למסך הניהול</button>
+        <button type="button" onclick="window.print()">🖨 שמור או הדפס</button>
+      </div>
+    </header>
+
+    <section class="guide-card">
+      <h2>תיאום עין-יד</h2>
+      <ul class="guide-list">
+        <li>100% מתחלקים לאורך המסלול: קטעים בתוך המסלול מוסיפים נקודות, יציאה לקירות/חוץ גורעת.</li>
+        <li>המסלול מחושב באחוזים: inside, wall ו-outside. כל אחוז בקיר מוכפל במקדם קנס, ולחוץ קנס גבוה יותר.</li>
+        <li>הרמות עכבר מוסיפות קנס קבוע (liftFactor).</li>
+        <li>Raw = inside% − wallPenalty% − outsidePenalty% − liftPenalty%. ציון סופי בתחום 0–100 לאחר <i>clamp</i>.</li>
+      </ul>
+      <p class="guide-note">הציון הסופי ממופה לטווח הגלובלי: scaled = min + (raw/100)·(max−min).</p>
+    </section>
+
+    <section class="guide-card">
+      <h2>זמן תגובה</h2>
+      <ul class="guide-list">
+        <li>נספרות טעויות: לחיצות שגויות + מטרות שהוחמצו.</li>
+        <li>הפחתת נקודות פר טעימה: penaltyPerMistake = 100 / (expectedCycles · 1.1), כאשר expectedCycles משקלל אורך התבנית או משך בפועל.</li>
+        <li>Raw = clamp(100 − mistakesTotal · penaltyPerMistake, 0, 100).</li>
+      </ul>
+      <p class="guide-note">הציון הסופי הוא Scale(raw). משך הופעת הצורה (shapeDisplaySec) משפיע על כמות המחזורי החישוב.</p>
+    </section>
+
+    <section class="guide-card">
+      <h2>זיכרון צבעים</h2>
+      <ul class="guide-list">
+        <li>נספר סה"כ הצבעים שנשמרו נכון לאורך כל הריצות.</li>
+        <li>הטבלה הבאה קובעת את הציון הבסיסי:</li>
+      </ul>
+      <table class="guide-table">
+        <thead>
+          <tr><th>סה"כ צבעים נכונים</th><th>ציון בסיס</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>0–35</td><td>1</td></tr>
+          <tr><td>36–44</td><td>2</td></tr>
+          <tr><td>45–54</td><td>3</td></tr>
+          <tr><td>55–65</td><td>4</td></tr>
+          <tr><td>66–77</td><td>5</td></tr>
+          <tr><td>78–90</td><td>6</td></tr>
+          <tr><td>91+</td><td>7</td></tr>
+        </tbody>
+      </table>
+      <p class="guide-note">רמת הקושי שמורה ב-DB: "קשה" = אין שינוי, "בינוני" = ‎+1 לדרוג, "קל" = ‎+2 (תקרת 7). הציון הכולל הוא ממוצע כל הריצות שהוגדרו.</p>
+    </section>
+
+    <section class="guide-card">
+      <h2>מעקב וקשב</h2>
+      <ul class="guide-list">
+        <li>TrackingScore = clamp(insideTime% − 2·exits, 0, 100).</li>
+        <li>ClickAccuracy = אחוז הקשות נכונות מתוך כלל הניסיונות (נכונות, שגיאות ופספוסים).</li>
+        <li>Raw = 0.5 · TrackingScore + 0.5 · ClickAccuracy.</li>
+      </ul>
+      <p class="guide-note">משוקלל באופן שווה בין דיוק הנתיב לבין הקלדת הספרות.</p>
+    </section>
+
+    <section class="guide-card">
+      <h2>ירי במטרות (Target ID)</h2>
+      <ul class="guide-list">
+        <li>Accuracy = hits / shots.</li>
+        <li>Penalty = wrongTargets · 0.12.</li>
+        <li>Raw = clamp((Accuracy − Penalty) · 100, 0, 100).</li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <h2>מציאת הצפון</h2>
+      <ul class="guide-list">
+        <li>נמדד שגיאת זווית בין הכיוון שסומן לבין כיוון הצפון האמיתי.</li>
+        <li>המרחק ביחס לרווח בין החצים (stepDeg) משייך את השגיאה לאחת מ-5 מדרגות.</li>
+        <li>כל מדרגה מייצרת יחס (1, 0.85, 0.7, 0.55, או חישוב לינארי עד 0.5) שממופה מיידית לסקאלה הגלובלית.</li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <h2>בקרת טיסה</h2>
+      <ul class="guide-list">
+        <li>מחושב המרחק הממוצע בין כלי הטיס למרכז המעגל.</li>
+        <li>ratio = max(0, 1 − avgDist / maxRadius).</li>
+        <li>Raw = clamp((ratio^2.2) · 100, 0, 100) – מדגיש דיוק גבוה.</li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <h2>מבחן הטסה</h2>
+      <ul class="guide-list">
+        <li>מתייחס לדגימת מסלול מלאה: התקדמות לאורך המסלול, שהייה בתוך המסדרון ודיוק ביחס למרכז.</li>
+        <li>PathCoverage – אחוז המסלול שכוסה.</li>
+        <li>InsideCoverage – כמה מההתקדמות בוצעה בתוך המסדרון (או fallback מתוך מדגם הנקודות).</li>
+        <li>CenterFactor – בודק עד כמה הנבחן צמוד למרכז (מקטין עד 20%).</li>
+        <li>Raw = clamp(PathCoverage · InsideCoverage · CenterFactor, 0, 1) · 100.</li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <h2>התמצאות וכיוונים</h2>
+      <ul class="guide-list">
+        <li>Raw = (מספר תשובות נכונות / מספר שאלות) · 100.</li>
+        <li>Scaled = min + (raw/100)·(max−min).</li>
+      </ul>
+    </section>
+
+    <section class="guide-card">
+      <h2>מיפוי הציון הגלובלי</h2>
+      <p>כל המבחנים (מלבד מציאת הצפון שמחשבת ישירות) ממירים את הציון הגולמי (0–100) לטווח שהוגדר במסך ההגדרות הכללי.</p>
+      <ul class="guide-list">
+        <li>scaleRange.min – ברירת מחדל 1.</li>
+        <li>scaleRange.max – ברירת מחדל 7.</li>
+        <li>Scaled = min + (raw/100) · (max − min).</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

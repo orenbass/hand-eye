@@ -8,8 +8,28 @@ const DEFAULTS = {
   practiceSeconds: 45,
   examCountdownSec: 5,
   examRuns: 1,
-  examRetryDelaySec: 3
+  examRetryDelaySec: 3,
+  difficulty: 'hard'
 };
+
+const DIFFICULTY_ALIASES = {
+  hard: 'hard',
+  קשה: 'hard',
+  medium: 'medium',
+  בינוני: 'medium',
+  easy: 'easy',
+  קל: 'easy'
+};
+
+function normalizeDifficulty(value){
+  if(value === undefined || value === null) return DEFAULTS.difficulty;
+  const str = String(value).trim();
+  if(!str) return DEFAULTS.difficulty;
+  const direct = DIFFICULTY_ALIASES[str];
+  if(direct) return direct;
+  const lower = str.toLowerCase();
+  return DIFFICULTY_ALIASES[lower] || DEFAULTS.difficulty;
+}
 
 // cache להגדרות שנטענו מה-DB
 let cachedRemoteConfig = null;
@@ -54,7 +74,9 @@ function mapDBFieldToConfig(key) {
     'memoryPracticeSeconds': 'practiceSeconds',
     'memoryExamCountdownSec': 'examCountdownSec',
     'memoryExamRuns': 'examRuns',
-    'memoryExamRetryDelaySec': 'examRetryDelaySec'
+    'memoryExamRetryDelaySec': 'examRetryDelaySec',
+    'memoryDifficulty': 'difficulty',
+    'memoryDifficultyAdvanced': 'difficulty'
   };
   return mapping[key] || key;
 }
@@ -73,7 +95,8 @@ export function getMemoryConfig() {
       practiceRuns: DEFAULTS.practiceRuns,
       examCountdownSec: DEFAULTS.examCountdownSec,
       examRuns: DEFAULTS.examRuns,
-      examRetryDelaySec: DEFAULTS.examRetryDelaySec
+      examRetryDelaySec: DEFAULTS.examRetryDelaySec,
+      difficulty: DEFAULTS.difficulty
     };
   }
   
@@ -83,8 +106,12 @@ export function getMemoryConfig() {
     const configKey = mapDBFieldToConfig(key);
     const value = cachedRemoteConfig[key];
     if (value !== undefined && value !== null && value !== '') {
-      // המרה למספר
-      dbValues[configKey] = typeof value === 'string' ? Number(value) : value;
+      if(configKey === 'difficulty'){
+        dbValues[configKey] = value;
+      } else {
+        const numValue = typeof value === 'string' ? Number(value) : value;
+        dbValues[configKey] = Number.isFinite(numValue) ? numValue : value;
+      }
     }
   });
   
@@ -96,9 +123,10 @@ export function getMemoryConfig() {
   const examCountdownSec = dbValues.examCountdownSec ?? DEFAULTS.examCountdownSec;
   const examRuns = dbValues.examRuns ?? DEFAULTS.examRuns;
   const examRetryDelaySec = dbValues.examRetryDelaySec ?? DEFAULTS.examRetryDelaySec;
+  const difficulty = normalizeDifficulty(dbValues.difficulty ?? DEFAULTS.difficulty);
 
   console.log('[memory.config] 📊 ערכים סופיים:', {
-    practiceSeconds, practiceRuns, examCountdownSec, examRuns, examRetryDelaySec
+    practiceSeconds, practiceRuns, examCountdownSec, examRuns, examRetryDelaySec, difficulty
   });
 
   // בניית הקונפיג הסופי - ללא Math.max שיכול לדרוס ערכים
@@ -110,7 +138,8 @@ export function getMemoryConfig() {
     practiceRuns: practiceRuns,
     examCountdownSec: examCountdownSec,
     examRuns: examRuns,
-    examRetryDelaySec: examRetryDelaySec
+    examRetryDelaySec: examRetryDelaySec,
+    difficulty
   };
   
   console.log('[memory.config] 📤 final config:', JSON.stringify(config));

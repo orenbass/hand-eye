@@ -249,6 +249,24 @@
     interactionLockState = null;
   }
 
+  // שחרור כל הנעילות ללא צורך ב-token (לשימוש במשוב)
+  function unlockAllInteractions(){
+    if(interactionLockState){
+      detachInteractionHandlers();
+      if(interactionLockState.savedStyles){
+        const st = interactionLockState.savedStyles;
+        document.body.style.overflow = st.bodyOverflow;
+        document.documentElement.style.overflow = st.htmlOverflow;
+        document.body.style.userSelect = st.bodyUserSelect;
+        document.body.style.touchAction = st.bodyTouchAction;
+      }
+      document.body.classList.remove('test-input-lock');
+      document.documentElement.classList.remove('test-input-lock');
+      interactionLockState = null;
+      console.log('[testsCore] All interactions unlocked');
+    }
+  }
+
   // expose
   window.testsCore = {
     registerTest,
@@ -258,7 +276,8 @@
     on,
     lockInteractions,
     updateInteractionLock,
-    unlockInteractions
+    unlockInteractions,
+    unlockAllInteractions
   };
   document.addEventListener('DOMContentLoaded', loadPersisted);
 })();

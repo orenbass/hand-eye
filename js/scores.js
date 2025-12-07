@@ -161,6 +161,9 @@
             const rows = await window.examData.listUsers({ limit:500 });
             const grouped = groupByCandidate(rows || []);
             
+            // טען attempts עבור כל המשתמשים כדי לחשב ציון ממוצע
+            await preloadAllAttempts(grouped);
+            
             // עדכן את מודול הייצוא עם הנתונים
             if(window.scoresExport && typeof window.scoresExport.setData === 'function'){
                 window.scoresExport.setData(grouped);
@@ -171,6 +174,44 @@
         } catch(err){
             console.warn('[scores] load failed', err);
             statusEl.textContent = 'שגיאה בטעינת הנתונים';
+        }
+    }
+    
+    // טעינת כל ה-attempts מראש לחישוב ציונים
+    async function preloadAllAttempts(groups){
+        if(!window.supabaseClient) return;
+        try {
+            // אסוף את כל ה-user IDs
+            const userIds = [];
+            groups.forEach(g => {
+                g.sessions.forEach(s => {
+                    if(s.id) userIds.push(s.id);
+                });
+            });
+            if(!userIds.length) return;
+            
+            // טען את כל ה-attempts בקריאה אחת
+            const { data, error } = await window.supabaseClient
+                .from('exam_user_attempts')
+                .select('candidate_id,test_id,scaled_score,raw_score')
+                .in('candidate_id', userIds);
+            
+            if(error) {
+                console.warn('[scores] preload attempts error:', error);
+                return;
+            }
+            
+            // קבץ לפי candidate_id
+            (data || []).forEach(att => {
+                if(!candidateAttemptsCache.has(att.candidate_id)) {
+                    candidateAttemptsCache.set(att.candidate_id, []);
+                }
+                candidateAttemptsCache.get(att.candidate_id).push(att);
+            });
+            
+            console.log('[scores] Preloaded attempts for', candidateAttemptsCache.size, 'users');
+        } catch(err) {
+            console.warn('[scores] preload attempts failed:', err);
         }
     }
 
@@ -300,10 +341,22 @@
     }
 
     function calcSessionScore(session){
-        if(!session || !session.scores || typeof session.scores !== 'object') return null;
-        const values = Object.values(session.scores).map(Number).filter(v=>Number.isFinite(v));
-        if(!values.length) return null;
-        return values.reduce((a,b)=>a+b,0) / values.length;
+        // נסה קודם מעמודת scores
+        if(session && session.scores && typeof session.scores === 'object') {
+            const values = Object.values(session.scores).map(Number).filter(v=>Number.isFinite(v));
+            if(values.length) {
+                return values.reduce((a,b)=>a+b,0) / values.length;
+            }
+        }
+        // אם אין scores, בדוק אם יש ציונים שנשמרו מקומית ב-cache
+        if(session && session.id && candidateAttemptsCache.has(session.id)) {
+            const attempts = candidateAttemptsCache.get(session.id);
+            const scores = attempts.map(a => a.scaled_score ?? a.raw_score).filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)));
+            if(scores.length) {
+                return scores.reduce((a,b) => a + Number(b), 0) / scores.length;
+            }
+        }
+        return null;
     }
 
     async function renderSessionDetails(group, container){
@@ -516,9 +569,10 @@
                 ${test.completed_at ? `<span><strong>הושלם:</strong> ${formatDate(test.completed_at)}</span>` : ''}
             </div>
         `;
-        const rawBlock = test.raw_payload && typeof test.raw_payload === 'object'
-            ? `<div style="margin-top:10px"><div style="font-weight:600;color:#f472b6;margin-bottom:4px">נתונים גולמיים</div>${renderStructuredData(test.raw_payload, 0)}</div>`
-            : '<div style="margin-top:10px;color:#94a3b8;font-size:0.85rem">אין נתונים גולמיים זמינים עבור מבחן זה.</div>';
+        const filteredPayload = filterScorePayload(test.raw_payload);
+        const rawBlock = filteredPayload
+            ? `<div style="margin-top:10px"><div style="font-weight:600;color:#f472b6;margin-bottom:4px">נתונים גולמיים</div>${renderStructuredData(filteredPayload, 0)}</div>`
+            : '<div style="margin-top:10px;color:#94a3b8;font-size:0.85rem">אין נתונים גולמיים רלוונטיים עבור מבחן זה.</div>';
 
         return `
             <div style="border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:12px">
@@ -686,8 +740,9 @@
             return header + `<p style="font-size:0.85rem;color:#cbd5f5">לא נמצאו ניסיונות${focusTestId ? ' למבחן זה' : ''} במערכת.</p>`;
         }
         const rows = attempts.map((att, idx)=>{
-            const rawBlock = att.raw_payload && typeof att.raw_payload === 'object'
-                ? `<details style="margin-top:6px"><summary style="cursor:pointer;color:#93c5fd">נתונים גולמיים</summary><div style="background:rgba(15,23,42,0.8);padding:8px;border-radius:8px;color:#e2e8f0;overflow:auto">${renderStructuredData(att.raw_payload, 0)}</div></details>`
+            const filteredPayload = filterScorePayload(att.raw_payload);
+            const rawBlock = filteredPayload
+                ? `<details style="margin-top:6px"><summary style="cursor:pointer;color:#93c5fd">נתונים גולמיים</summary><div style="background:rgba(15,23,42,0.8);padding:8px;border-radius:8px;color:#e2e8f0;overflow:auto">${renderStructuredData(filteredPayload, 0)}</div></details>`
                 : '';
             const sessionInfo = att.session ? `<span>קוד כניסה: ${escapeHtml(att.session.entry_pin || '-')}</span>` : '';
             const attemptLabel = att.attempt_index ? att.attempt_index : (idx + 1);
@@ -706,6 +761,41 @@
             `;
         }).join('');
         return header + rows;
+    }
+
+    const RAW_METADATA_KEYS = new Set(['_client','client','identifier','queuedAt','appVersion','version','sessionId','device','platform','examRuns','examScores','runsConfigured','runsCompleted','attemptScores']);
+
+    function filterScorePayload(data, parentKey){
+        if(data === null || data === undefined) return null;
+        if(typeof data === 'number' && Number.isFinite(data)) return data;
+        if(typeof data === 'string'){
+            const parsed = Number(data);
+            return Number.isFinite(parsed) ? parsed : null;
+        }
+        if(Array.isArray(data)){
+            const filteredArr = data
+                .map(item=>filterScorePayload(item, parentKey))
+                .filter(item=>{
+                    if(item === null) return false;
+                    if(typeof item === 'number') return true;
+                    if(Array.isArray(item)) return item.length>0;
+                    if(typeof item === 'object') return Object.keys(item).length>0;
+                    return false;
+                });
+            return filteredArr.length ? filteredArr : null;
+        }
+        if(typeof data === 'object'){
+            const result={};
+            Object.entries(data).forEach(([key,val])=>{
+                if(RAW_METADATA_KEYS.has(key)) return;
+                const filtered = filterScorePayload(val, key);
+                if(filtered !== null){
+                    result[key]=filtered;
+                }
+            });
+            return Object.keys(result).length ? result : null;
+        }
+        return null;
     }
 
     function renderStructuredData(value, depth, parentKey){

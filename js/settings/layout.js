@@ -38,6 +38,7 @@ export function renderAdminLayout(container){
         <button id="exportSettings" class="save-settings-btn save-bar-btn" type="button">⬇ הורד הגדרות (JSON)</button>
         <button id="exportSettingsZip" class="save-settings-btn save-bar-btn" type="button">🗜 הורד ZIP</button>
         <button id="importSettingsFile" class="save-settings-btn save-bar-btn" type="button">📂 טען קובץ הגדרות</button>
+        <button id="openScoringGuide" class="save-settings-btn save-bar-btn" type="button">📘 הסבר ניקוד</button>
         <span id="saveStatus" class="save-status" aria-live="polite"></span>
       </div>
       <div class="admin-layout-grid">
@@ -57,9 +58,9 @@ export function renderAdminLayout(container){
         <div class="admin-content-panel">
           <div class="settings-section section-general" data-tab-section="general">
             <h3>הגדרות כלליות</h3>
-            <div class="form-grid">
               <div class="form-group">
-                <label>סקאלת ציון גלובלית</label>
+                <label for="memoryDifficultyAdvanced">רמת קושי</label>
+                <select id="memoryDifficultyAdvanced">
                 <div class="scale-inputs">
                   <input id="cfgScaleMin" type="number" min="1" max="99" value="1" placeholder="מינ׳">
                   <span>עד</span>

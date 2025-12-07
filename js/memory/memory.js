@@ -562,8 +562,9 @@ import { computeMemoryScore } from './memory.scoring.js';
             this.clearAllNodeEffects();
             
             // חישוב ציון סופי
-            const score = computeMemoryScore(this.totalCorrectColors);
+            const score = computeMemoryScore(this.totalCorrectColors, this.config && this.config.difficulty);
             this.examScores.push(score);
+            this.examRunsComplete += 1;
             
             // סיום המבחן
             this.finish();
@@ -644,21 +645,26 @@ import { computeMemoryScore } from './memory.scoring.js';
                 finalScore = sum / this.examScores.length;
             } else {
                 // אם לא היו ניסיונות שלמים, חשב מהמצב הנוכחי
-                finalScore = computeMemoryScore(this.totalCorrectColors);
+                finalScore = computeMemoryScore(this.totalCorrectColors, this.config && this.config.difficulty);
             }
             
             // raw score for backward compatibility (0-100)
             const raw = Math.round((finalScore / 7) * 100);
+            const roundedFinalScore = Number(finalScore.toFixed(2));
+            const configuredRuns = (this.config && Number.isFinite(this.config.examRuns)) ? this.config.examRuns : 1;
+            const attemptScores = this.examScores.map(score => Number(score.toFixed(2)));
 
             if(window.testAuth){
-                window.testAuth.showTestCompleteModal('memory', finalScore.toFixed(2));
+                window.testAuth.showTestCompleteModal('memory', roundedFinalScore.toFixed(2));
             }
             if(window.testsCore){
                 window.testsCore.completeTest('memory', raw, finalScore, {
                     totalCorrectColors: this.totalCorrectColors,
                     maxAchieved: this.maxAchieved,
-                    examRuns: this.examRunsComplete,
-                    examScores: this.examScores
+                    runsConfigured: configuredRuns,
+                    runsCompleted: this.examRunsComplete,
+                    attemptScores,
+                    finalScore: roundedFinalScore
                 });
             }
         }

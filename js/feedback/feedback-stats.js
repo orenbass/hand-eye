@@ -165,9 +165,9 @@ class FeedbackStats {
         
         try {
             const { data, error } = await window.supabaseClient
-                .from('test_attempts')
+                .from('exam_user_attempts')
                 .select('*')
-                .in('user_id', userIds);
+                .in('candidate_id', userIds);
             
             if (error) throw error;
             return data || [];
@@ -186,7 +186,7 @@ class FeedbackStats {
         
         if (!filteredScores.length) return null;
         
-        const sum = filteredScores.reduce((acc, s) => acc + (s.score || 0), 0);
+        const sum = filteredScores.reduce((acc, s) => acc + (s.scaled_score || s.raw_score || 0), 0);
         return Math.round((sum / filteredScores.length) * 100) / 100;
     }
 
@@ -202,7 +202,9 @@ class FeedbackStats {
 
         for (const option of question.options) {
             const userIds = this.getUserIdsByAnswer(questionId, option.value);
+            console.log(`[feedback-stats] Question ${questionId}, answer "${option.value}": userIds=`, userIds);
             const scores = await this.loadScoresByUserIds(userIds);
+            console.log(`[feedback-stats] Loaded ${scores.length} scores for these users:`, scores);
             
             // קבץ ציונים לפי מבחן
             const testScores = {};
@@ -210,7 +212,7 @@ class FeedbackStats {
                 if (!testScores[s.test_id]) {
                     testScores[s.test_id] = [];
                 }
-                testScores[s.test_id].push(s.score);
+                testScores[s.test_id].push(s.scaled_score || s.raw_score || 0);
             });
 
             // חשב ממוצעים

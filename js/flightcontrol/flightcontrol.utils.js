@@ -10,12 +10,12 @@ let noiseState = {
   baseStrength: 40
 };
 
-// קביעת מהירות לפי רמת קושי
+// קביעת מהירות לפי רמת קושי - ערכים מוגברים משמעותית
 export function setNoiseSpeed(difficulty = 'medium') {
   const speedMap = {
-    easy:   { speed: 0.06, strength: 24 },
-    medium: { speed: 0.10, strength: 40 },
-    hard:   { speed: 0.18, strength: 64 }
+    easy:   { speed: 0.35, strength: 90 },
+    medium: { speed: 0.55, strength: 140 },
+    hard:   { speed: 0.80, strength: 200 }
   };
   const cfg = speedMap[difficulty] || speedMap.medium;
   noiseState.speed = cfg.speed;

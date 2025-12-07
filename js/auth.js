@@ -84,6 +84,15 @@
         previewState.testId = null;
         previewState.returnTest = 'admin';
         previewState.reopenSettings = false;
+        
+        // נקה localStorage כדי למנוע מצב לא עקבי
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('currentUserUuid');
+        localStorage.removeItem('currentUserRecord');
+        localStorage.removeItem('isAdmin');
+        localStorage.removeItem('completedTests');
+        localStorage.removeItem('testScores');
+        localStorage.removeItem('attemptCounts');
     }
 
     function validateID(id) {
@@ -223,28 +232,71 @@
         if(service && typeof service.fetchActiveSettings === 'function'){
           try {
             const remoteSettings = await service.fetchActiveSettings();
-            if(remoteSettings && remoteSettings.payload && remoteSettings.payload.settings && Array.isArray(remoteSettings.payload.settings.tests)){
-              const remoteTestsConfig = remoteSettings.payload.settings;
-              requiredTests = remoteTestsConfig.tests
-                .filter(t => t.include !== false)
-                .map(t => t.id);
-              console.log('[auth] Loaded required tests from database:', requiredTests);
-              // עדכן את window.appSettings כדי ש-refreshTestOrder יעבוד נכון
-              if(!window.appSettings) window.appSettings = {};
-              window.appSettings.tests = remoteTestsConfig.tests;
-              // שמור גם ב-localStorage
-              localStorage.setItem('app.settings.v1', JSON.stringify(window.appSettings));
-              localStorage.setItem('requiredTests', JSON.stringify(requiredTests));
-              // שלח אירוע עדכון הגדרות כדי שהניווט יתעדכן
-              window.dispatchEvent(new Event('settings-updated'));
-              console.log('[auth] Dispatched settings-updated event');
+            if(remoteSettings && remoteSettings.payload){
+              const payload = remoteSettings.payload;
+              let remoteTestsConfig = null;
               
-              // בנייה מחדש של ה-UI באופן יזום אם הפונקציה קיימת
-              if(typeof window.buildTestSelectorUI === 'function'){
-                  console.log('[auth] Calling buildTestSelectorUI explicitly');
-                  window.buildTestSelectorUI();
-              } else {
-                  console.warn('[auth] window.buildTestSelectorUI is not available');
+              // תמיכה ב-2 פורמטים: settings.tests או testsLayout.tests
+              if(payload.settings && Array.isArray(payload.settings.tests)){
+                remoteTestsConfig = payload.settings;
+                console.log('[auth] Using payload.settings format');
+              } else if(payload.testsLayout && Array.isArray(payload.testsLayout.tests)){
+                // המרת testsLayout לפורמט settings
+                remoteTestsConfig = {
+                  tests: payload.testsLayout.tests.map(t => ({
+                    id: t.id,
+                    name: t.name || t.id,
+                    include: t.include !== false
+                  }))
+                };
+                console.log('[auth] Using payload.testsLayout format');
+              }
+              
+              if(remoteTestsConfig && Array.isArray(remoteTestsConfig.tests)){
+                requiredTests = remoteTestsConfig.tests
+                  .filter(t => t.include !== false)
+                  .map(t => t.id);
+                console.log('[auth] Loaded required tests from database:', requiredTests);
+                
+                // מיזוג עם הגדרות קיימות (שמור הגדרות ספציפיות כמו seconds, difficulty)
+                if(!window.appSettings) window.appSettings = {};
+                if(Array.isArray(window.appSettings.tests)){
+                  // עדכן רק include וסדר, שמור על שאר ההגדרות
+                  const orderMap = new Map();
+                  remoteTestsConfig.tests.forEach((t, idx) => {
+                    orderMap.set(t.id, { include: t.include !== false, order: idx });
+                  });
+                  window.appSettings.tests = window.appSettings.tests
+                    .map(t => {
+                      const remote = orderMap.get(t.id);
+                      if(remote){
+                        return Object.assign({}, t, { include: remote.include });
+                      }
+                      return t;
+                    })
+                    .sort((a, b) => {
+                      const aOrder = orderMap.has(a.id) ? orderMap.get(a.id).order : 999;
+                      const bOrder = orderMap.has(b.id) ? orderMap.get(b.id).order : 999;
+                      return aOrder - bOrder;
+                    });
+                } else {
+                  window.appSettings.tests = remoteTestsConfig.tests;
+                }
+                
+                // שמור גם ב-localStorage
+                localStorage.setItem('app.settings.v1', JSON.stringify(window.appSettings));
+                localStorage.setItem('requiredTests', JSON.stringify(requiredTests));
+                // שלח אירוע עדכון הגדרות כדי שהניווט יתעדכן
+                window.dispatchEvent(new Event('settings-updated'));
+                console.log('[auth] Dispatched settings-updated event');
+                
+                // בנייה מחדש של ה-UI באופן יזום אם הפונקציה קיימת
+                if(typeof window.buildTestSelectorUI === 'function'){
+                    console.log('[auth] Calling buildTestSelectorUI explicitly');
+                    window.buildTestSelectorUI();
+                } else {
+                    console.warn('[auth] window.buildTestSelectorUI is not available');
+                }
               }
             }
           } catch(err){
@@ -312,18 +364,11 @@
     
     function logout() {
         exitPreviewMode();
-        resetSessionState();
+        resetSessionState(); // זה גם מנקה localStorage
         
         // שחרר נעילת מבחן אם קיימת
         if(window.examLock) window.examLock.unlock();
         
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('currentUserUuid');
-        localStorage.removeItem('currentUserRecord');
-        localStorage.removeItem('isAdmin');
-        localStorage.removeItem('completedTests');
-        localStorage.removeItem('testScores');
-        localStorage.removeItem('attemptCounts');
         // הסתר ברכת שלום
         const greetingEl = document.getElementById('welcome-greeting');
         if(greetingEl) greetingEl.style.display = 'none';
@@ -332,6 +377,18 @@
     // התחלת שאלון המשוב
     function startFeedbackSurvey() {
         console.log('[auth] Starting feedback survey');
+        
+        // שחרר נעילת מבחן כדי לאפשר הקלדה חופשית במשוב
+        if(window.examLock && typeof window.examLock.unlock === 'function') {
+            console.log('[auth] Unlocking exam for feedback survey');
+            window.examLock.unlock();
+        }
+        
+        // שחרר גם נעילת אינטראקציות אם קיימת
+        if(window.testsCore && typeof window.testsCore.unlockAllInteractions === 'function') {
+            console.log('[auth] Unlocking all interactions for feedback survey');
+            window.testsCore.unlockAllInteractions();
+        }
         
         // הסתר את כל הסקשנים
         document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
@@ -348,7 +405,6 @@
         if (window.feedbackSurvey) {
             window.feedbackSurvey.init('feedback-container', userId, () => {
                 // בסיום המשוב - התנתק
-                if(window.examLock) window.examLock.unlock();
                 logout();
                 showLoginScreen();
                 
@@ -380,13 +436,23 @@
         const buttons = document.querySelectorAll('#test-selector .nav-btn');
         // הסתרת כפתורים שאינם בסדר הנוכחי (אולי נשארו ישנים)
         buttons.forEach(btn=>{ if(!testOrder.includes(btn.dataset.test)) btn.style.display='none'; else btn.style.display=''; });
+        
+        // כפתורי מנהל - הצג רק למנהל, הסתר מכולם אחרים
+        const adminBtn = document.getElementById('admin-button');
+        const scoresBtn = document.getElementById('scores-button');
+        
         if (isAdmin) {
             buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('locked'); });
-            const adminBtn = document.getElementById('admin-button'); if (adminBtn) adminBtn.style.display = 'block';
-            const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='block';
+            if (adminBtn) adminBtn.style.display = 'block';
+            if(scoresBtn) scoresBtn.style.display='block';
+            console.log('[auth] updateTestButtons: Admin mode - showing admin controls');
             return;
         }
-        const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='none';
+        
+        // משתמש רגיל - הסתר כפתורי מנהל
+        if (adminBtn) adminBtn.style.display = 'none';
+        if(scoresBtn) scoresBtn.style.display='none';
+        console.log('[auth] updateTestButtons: User mode - hiding admin controls');
         let highest = -1; completedTests.forEach(t=>{ const idx=testOrder.indexOf((t||'').trim()); if(idx>highest) highest=idx; });
         console.log('[auth] completedTests=', [...completedTests], 'highestIdx=', highest, 'order=', testOrder);
         buttons.forEach(btn => {
@@ -572,6 +638,7 @@
             errorMsg.style.display = 'none';
             try {
                 await login(id, pin);
+                console.log('[auth] Login successful. isAdmin:', isAdmin, 'user:', currentUser);
                 errorMsg.style.display = 'none';
                 hideLoginScreen();
                 updateTestButtons();
@@ -579,7 +646,10 @@
                 applyBodyMode();
                 updateWelcomeGreeting(); // הצג ברכת שלום
                 if(!isAdmin) {
+                    console.log('[auth] User is not admin - showing intro screen');
                     showIntroScreen();
+                } else {
+                    console.log('[auth] User is admin - skipping intro screen');
                 }
             } catch(err){
                 errorMsg.style.display = 'block';
@@ -604,16 +674,32 @@
     
     function setupLogoutButton() {
         const logoutButton = document.getElementById('logout-button');
-        if (!logoutButton) return;
+        if (!logoutButton) {
+            console.warn('[auth] logout-button not found');
+            return;
+        }
         
-        logoutButton.addEventListener('click', () => {
+        console.log('[auth] Setting up logout button');
+        
+        logoutButton.addEventListener('click', (e) => {
+            console.log('[auth] Logout button clicked');
+            e.preventDefault();
+            e.stopPropagation();
+            
             if (confirm('האם אתה בטוח שברצונך לצאת מהמערכת?')) {
-                logout(); showLoginScreen();
+                console.log('[auth] User confirmed logout');
+                logout(); 
+                showLoginScreen();
                 // במקום לכפות eyehand – מנקה מצבים
-                const navButtons = document.querySelectorAll('.nav-btn'); navButtons.forEach(btn => { btn.disabled = true; btn.classList.add('locked'); });
-                const scoresBtn = document.getElementById('scores-button'); if(scoresBtn) scoresBtn.style.display='none';
+                const navButtons = document.querySelectorAll('.nav-btn'); 
+                navButtons.forEach(btn => { btn.disabled = true; btn.classList.add('locked'); });
+                const scoresBtn = document.getElementById('scores-button'); 
+                if(scoresBtn) scoresBtn.style.display='none';
                 if(window.scoresView && typeof window.scoresView.close === 'function') window.scoresView.close();
-                applyBodyMode(); hideUserStatsIfNeeded();
+                applyBodyMode(); 
+                hideUserStatsIfNeeded();
+            } else {
+                console.log('[auth] User cancelled logout');
             }
         });
     }
