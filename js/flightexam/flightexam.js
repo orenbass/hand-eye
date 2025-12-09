@@ -9,6 +9,14 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   if(!startBtn || !canvas) return;
   const ctx = canvas.getContext('2d');
 
+  // Ensure focus returns to window when clicking canvas
+  canvas.addEventListener('mousedown', () => {
+    window.focus();
+    if(document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+  });
+
   let cfg = null;
   let pathDisplaySec = 15, durationFlightSec = 60, preFlightDelaySec = 10;
   let stage = 'idle';
@@ -63,7 +71,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function showPrePracticeModal(onStart){
     const modal = ensurePracticeModal();
     const contentBox = modal.querySelector('.flightexam-modal-content');
-    
+   
     contentBox.innerHTML = `
         <div style="font-size:2.6rem;margin-bottom:12px">ℹ️</div>
         <h2 style="margin:0 0 12px;font-size:1.45rem;">תרגול ניסיון לפני המבחן האמיתי</h2>
@@ -73,13 +81,14 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         </p>
         <button type="button" data-action="start-practice" style="padding:12px 22px;border:none;border-radius:14px;background:linear-gradient(135deg,#0ea5e9 0%,#0284c7 100%);color:#fff;font-weight:700;font-size:1rem;cursor:pointer;min-width:240px;">התחל תרגול</button>
     `;
-    
+   
     modal.style.display = 'flex';
-    
+   
     const startBtn = contentBox.querySelector('[data-action="start-practice"]');
     if (startBtn) {
       startBtn.onclick = () => {
         modal.style.display = 'none';
+        window.focus();
         if (typeof onStart === 'function') onStart();
       };
     }
@@ -88,7 +97,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function showPracticeTransitionPrompt(onContinue){
     const modal = ensurePracticeModal();
     const contentBox = modal.querySelector('.flightexam-modal-content');
-    
+   
     contentBox.innerHTML = `
         <div style="font-size:2.5rem;margin-bottom:12px">✈️</div>
         <h2 style="margin:0 0 12px;font-size:1.45rem;">התרגול הסתיים</h2>
@@ -100,12 +109,12 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     `;
 
     modal.style.display = 'flex';
-    
+   
     const confirmBtn = contentBox.querySelector('[data-action="confirm"]');
     if(confirmBtn){
       confirmBtn.onclick = ()=>{
         const countdownSec = cfg && typeof cfg.examCountdownSec === 'number' ? cfg.examCountdownSec : 5;
-        
+       
         if (countdownSec > 0) {
             // Countdown State inside modal
             let remaining = countdownSec;
@@ -114,20 +123,22 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
                 <h2 style="margin:0 0 8px;font-size:1.5rem;">המבחן מתחיל בעוד...</h2>
                 <p style="color:#64748b;margin:0">נא להתכונן</p>
             `;
-            
+           
             const timer = setInterval(() => {
                 remaining--;
                 const el = document.getElementById('fe-modal-countdown');
                 if(el) el.textContent = remaining;
-                
+               
                 if (remaining <= 0) {
                     clearInterval(timer);
                     modal.style.display = 'none';
+                    window.focus();
                     if (typeof onContinue === 'function') onContinue();
                 }
             }, 1000);
         } else {
             modal.style.display = 'none';
+            window.focus();
             if (typeof onContinue === 'function') onContinue();
         }
       };
@@ -203,7 +214,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     const headerEl = document.getElementById('flightexam-review-header');
     const titleEl = document.getElementById('flightexam-review-title');
     const footerEl = document.getElementById('flightexam-review-footer');
-    
+   
     if(show){
       if(headerEl){
         headerEl.style.display = 'flex';
@@ -227,7 +238,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     console.warn('[flightexam] plane icon failed to load', err);
   };
   planeIcon.src = 'assets/images/flightexam/plane.svg?v=1';
-  
+ 
   // PATH stage animation variables
   let lastTrailSampleDistance = 0;
   const TRAIL_SAMPLE_STEP = 0.004; // normalized path length step for sampling trail points
@@ -485,7 +496,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     console.log('[flightexam] start invoked');
     adjustLayout();
     if(active) return;
-    
+   
     // Download settings from server first
     if(startBtn) {
       const originalText = startBtn.textContent;
@@ -501,10 +512,10 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       startBtn.disabled = false;
       startBtn.textContent = originalText;
     }
-    
+   
     prePracticeShown = false; // Reset for new session
     if(window.enterFullscreenMode) window.enterFullscreenMode();
-    
+   
     cfg = getFlightExamConfig();
     pathDisplaySec = cfg.pathDisplaySec;
     preFlightDelaySec = cfg.preFlightDelaySec;
@@ -516,20 +527,20 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     corridorHalfWidth = Math.max(0.02, corridorHalfWidth);
     corridorPenaltyWidth = Math.max(corridorHalfWidth + 0.01, corridorPenaltyWidth);
 
-    active = true; 
+    active = true;
     stage='preload-first';
-    const view = document.querySelector('#flightexam-screen .test-view'); 
+    const view = document.querySelector('#flightexam-screen .test-view');
     if(view) view.style.display='block';
     attachHeaderHUDs();
     hideHud();
     if(window.practiceBanner) window.practiceBanner.hide();
     setStageMessage('מכין את חלקי מבחן הטיסה...');
-    if(window.testAuth && !window.testAuth.isAdmin()) { 
-      statsBox && (statsBox.style.display='none'); 
-    } else { 
-      statsBox && (statsBox.style.display='block'); 
+    if(window.testAuth && !window.testAuth.isAdmin()) {
+      statsBox && (statsBox.style.display='none');
+    } else {
+      statsBox && (statsBox.style.display='block');
     }
-    resize(); 
+    resize();
     draw();
 
     try {
@@ -538,16 +549,16 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         await window.refreshFlightExamPartsFromDb();
         globalRefreshing = false;
       }
-      
+     
       partsRef = window.getFlightExamParts? (window.getFlightExamParts()||[]):[];
-      
+     
       // Sort and limit practice parts based on configuration
       const practiceParts = partsRef.filter(p => p.isPractice);
       const examParts = partsRef.filter(p => !p.isPractice);
       // Default to 1 if not specified, but allow 0 if explicitly set to 0 (though unlikely for practice)
       const maxPractice = (cfg && typeof cfg.practiceRuns === 'number') ? cfg.practiceRuns : 1;
       const finalPracticeParts = practiceParts.slice(0, maxPractice);
-      
+     
       // Limit exam parts
       const maxExam = (cfg && typeof cfg.examRuns === 'number') ? cfg.examRuns : 1;
       const finalExamParts = examParts.slice(0, maxExam);
@@ -560,7 +571,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       updatePracticeUiState();
 
       console.log('[flightexam] parts count=', partsRef.length, 'practiceIndex=', practiceIndex, 'maxPractice=', maxPractice);
-      if(!partsRef.length){ 
+      if(!partsRef.length){
         throw new Error('לא נמצאו חלקי מבחן טיסה. ודא שהתמונות הועלו לשרת.');
       }
       if(practiceIndex !== -1 && !hasNonPracticeParts(partsRef)){
@@ -574,9 +585,9 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
 
       await preloadPart(partsRef, 0);
 
-      loadingStarted=false; 
-      userTrack=[]; 
-      reviewActive=false; 
+      loadingStarted=false;
+      userTrack=[];
+      reviewActive=false;
       score=100;
       loadPart(0);
       startTimer();
@@ -598,29 +609,29 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0,0,canvas.width,canvas.height);
-    
+   
     ctx.fillStyle='#ef4444';
     ctx.font='60px system-ui';
     ctx.textAlign='center';
     ctx.fillText('⚠️', canvas.width/2, canvas.height/2 - 80);
-    
+   
     ctx.fillStyle='#ef4444';
     ctx.font='28px system-ui';
     ctx.fillText('שגיאה בטעינת המבחן', canvas.width/2, canvas.height/2 - 20);
-    
+   
     ctx.fillStyle='#94a3b8';
     ctx.font='18px system-ui';
     const lines = message.split('\n');
     lines.forEach((line, i) => {
       ctx.fillText(line, canvas.width/2, canvas.height/2 + 20 + (i * 30));
     });
-    
+   
     ctx.fillStyle='#3b82f6';
     ctx.fillRect(canvas.width/2 - 80, canvas.height/2 + 80, 160, 50);
     ctx.fillStyle='#ffffff';
     ctx.font='18px system-ui';
     ctx.fillText('נסה שוב', canvas.width/2, canvas.height/2 + 110);
-    
+   
     canvas.style.cursor = 'pointer';
     const clickHandler = () => {
       canvas.removeEventListener('click', clickHandler);
@@ -633,19 +644,19 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function loadPart(index){
     const practicePart = isPracticePart(index);
     console.log('[flightexam] loadPart START', index, practicePart? '(practice)': '');
-    userTrack=[]; rotHoldLeft=0; rotHoldRight=0; 
+    userTrack=[]; rotHoldLeft=0; rotHoldRight=0;
     keyState.ArrowLeft=false; keyState.ArrowRight=false; slowActive=false;
     reviewActive=false; loadingStarted=false; lastFrameTime=0; sampleAccum=0; score=100;
-    pathImgReady=false; pathImg=null; testImgReady=false; testImg=null; 
+    pathImgReady=false; pathImg=null; testImgReady=false; testImg=null;
     pathPoints=[]; pathCum=[]; pathTotalLen=0; lastDrawBox=null;
     lastTrailSampleDistance = 0;
     pathAnimTrail = [];
-    
+   
     const part = partsRef[index];
-    if(!part){ 
-      console.warn('[flightexam] missing part', index); 
-      finalizeReview(true); 
-      return; 
+    if(!part){
+      console.warn('[flightexam] missing part', index);
+      finalizeReview(true);
+      return;
     }
 
     if(practicePart && cfg && cfg.practiceDurationSec){
@@ -653,7 +664,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     } else {
       durationFlightSec = cfg.flightDurationSec;
     }
-    
+   
     console.log('[flightexam] Part loaded:', {
       test_number: part.test_number,
       hasPathImg: !!part.pathImg,
@@ -666,20 +677,20 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     setStageMessage(practicePart
       ? 'חלק תרגול – המסלול יוצג מיד. אל תיגע במקלדת עד לסיום הספירה.'
       : 'חלק מבחן – המסלול יוצג מיד. התבונן בלבד עד לסיום הספירה.');
-    
+   
     pathPoints = part.pathPoints? part.pathPoints.slice(): [];
     pathTotalLen = computePathLength(pathPoints);
-    
-    if(pathPoints.length>=2){ 
-      pathCum=[0]; 
+   
+    if(pathPoints.length>=2){
+      pathCum=[0];
       let total=0;
-      for(let i=1;i<pathPoints.length;i++){ 
-        const a=pathPoints[i-1], b=pathPoints[i]; 
-        const dx=b.x-a.x, dy=b.y-a.y; 
-        const d=Math.sqrt(dx*dx+dy*dy); 
-        total+=d; 
+      for(let i=1;i<pathPoints.length;i++){
+        const a=pathPoints[i-1], b=pathPoints[i];
+        const dx=b.x-a.x, dy=b.y-a.y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        total+=d;
         pathCum.push(total);
-      } 
+      }
     }
 
     const preloadRef = getPreloadedImages(index);
@@ -688,72 +699,72 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       hasPathImgObj: !!(preloadRef?.pathImgObj),
       hasTestImgObj: !!(preloadRef?.testImgObj)
     });
-    
-    if(preloadRef && preloadRef.pathImgObj){ 
-      pathImg = preloadRef.pathImgObj; 
-      pathImgReady = pathImg.complete; 
+   
+    if(preloadRef && preloadRef.pathImgObj){
+      pathImg = preloadRef.pathImgObj;
+      pathImgReady = pathImg.complete;
       console.log('[flightexam] pathImg from preload, ready:', pathImgReady);
     }
-    if(preloadRef && preloadRef.testImgObj){ 
-      testImg = preloadRef.testImgObj; 
-      testImgReady = testImg.complete; 
+    if(preloadRef && preloadRef.testImgObj){
+      testImg = preloadRef.testImgObj;
+      testImgReady = testImg.complete;
       console.log('[flightexam] testImg from preload, ready:', testImgReady);
     }
-    
-    if(!pathImg && part.pathImg){ 
+   
+    if(!pathImg && part.pathImg){
       console.log('[flightexam] Loading pathImg manually:', part.pathImg);
-      pathImg=new Image(); 
-      pathImg.onload=()=>{ 
-        pathImgReady=true; 
+      pathImg=new Image();
+      pathImg.onload=()=>{
+        pathImgReady=true;
         console.log('[flightexam] pathImg loaded successfully');
-      }; 
-      pathImg.onerror=(e)=>{ 
-        pathImgReady=false; 
+      };
+      pathImg.onerror=(e)=>{
+        pathImgReady=false;
         console.error('[flightexam] pathImg load error:', e);
-      }; 
-      pathImg.src=part.pathImg; 
+      };
+      pathImg.src=part.pathImg;
     }
-    if(!testImg && part.testImg){ 
+    if(!testImg && part.testImg){
       console.log('[flightexam] Loading testImg manually:', part.testImg);
-      testImg=new Image(); 
-      testImg.onload=()=>{ 
-        testImgReady=true; 
+      testImg=new Image();
+      testImg.onload=()=>{
+        testImgReady=true;
         console.log('[flightexam] testImg loaded successfully');
-      }; 
-      testImg.onerror=(e)=>{ 
-        testImgReady=false; 
+      };
+      testImg.onerror=(e)=>{
+        testImgReady=false;
         console.error('[flightexam] testImg load error:', e);
-      }; 
-      testImg.src=part.testImg; 
+      };
+      testImg.src=part.testImg;
     }
-    
-    if(pathImg){ 
+   
+    if(pathImg){
       console.log('[flightexam] Starting PATH display stage');
-      stage='path'; 
-      pathStartTime=Date.now(); 
-      resize(); 
-    } else { 
+      stage='path';
+      pathStartTime=Date.now();
+      resize();
+    } else {
       console.log('[flightexam] No pathImg, going to preflight/flight');
-      stage = preFlightDelaySec>0? 'preflight':'flight'; 
-      if(stage==='flight'){ 
-        flightStartTime=Date.now(); 
-        initPlaneFromPath(); 
-      } 
+      stage = preFlightDelaySec>0? 'preflight':'flight';
+      if(stage==='flight'){
+        flightStartTime=Date.now();
+        initPlaneFromPath();
+      }
     }
     warmNextPart(partsRef, index);
     console.log('[flightexam] loadPart DONE, stage=', stage);
   }
 
   function initPlaneFromPath(){
-    if(pathPoints && pathPoints.length>=2){ 
-      planeNX=pathPoints[0].x; 
-      planeNY=pathPoints[0].y; 
-      const a=pathPoints[0], b=pathPoints[1]; 
-      planeHeading=Math.atan2(b.y-a.y, b.x-a.x); 
-    } else { 
-      planeNX=0.5; 
-      planeNY=0.5; 
-      planeHeading=-Math.PI/2; 
+    if(pathPoints && pathPoints.length>=2){
+      planeNX=pathPoints[0].x;
+      planeNY=pathPoints[0].y;
+      const a=pathPoints[0], b=pathPoints[1];
+      planeHeading=Math.atan2(b.y-a.y, b.x-a.x);
+    } else {
+      planeNX=0.5;
+      planeNY=0.5;
+      planeHeading=-Math.PI/2;
     }
   }
 
@@ -763,45 +774,45 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     ctx.fillRect(0,0,canvas.width,canvas.height);
     const practiceActive = isPracticePart(currentPart);
     let hudUsed = false;
-    
+   
     if(stage==='preload-first'){
       // Animated loading screen
-      ctx.fillStyle='#ffffff'; 
-      ctx.font='bold 28px system-ui'; 
+      ctx.fillStyle='#ffffff';
+      ctx.font='bold 28px system-ui';
       ctx.textAlign='center';
       ctx.fillText(globalRefreshing? 'מרענן חלקים מהשרת...' : 'טוען תמונות ראשונות...', canvas.width/2, canvas.height/2 - 50);
       setStageMessage('טוען חלקי מבחן הטיסה...');
-      
-      ctx.font='16px system-ui'; 
-      ctx.fillStyle='#94a3b8'; 
+     
+      ctx.font='16px system-ui';
+      ctx.fillStyle='#94a3b8';
       ctx.fillText('אנא המתן, התמונות נטענות מהשרת', canvas.width/2, canvas.height/2 - 10);
-      
+     
       // Animated spinner
-      ctx.save(); 
-      ctx.translate(canvas.width/2, canvas.height/2 + 50); 
-      ctx.rotate((Date.now() % 2000) / 2000 * Math.PI * 2); 
-      ctx.strokeStyle='#3b82f6'; 
-      ctx.lineWidth=8; 
+      ctx.save();
+      ctx.translate(canvas.width/2, canvas.height/2 + 50);
+      ctx.rotate((Date.now() % 2000) / 2000 * Math.PI * 2);
+      ctx.strokeStyle='#3b82f6';
+      ctx.lineWidth=8;
       ctx.lineCap='round';
-      ctx.beginPath(); 
-      ctx.arc(0, 0, 35, 0, Math.PI * 1.5); 
-      ctx.stroke(); 
+      ctx.beginPath();
+      ctx.arc(0, 0, 35, 0, Math.PI * 1.5);
+      ctx.stroke();
       ctx.restore();
-      
+     
       // Progress indicator
-      ctx.fillStyle='#60a5fa'; 
+      ctx.fillStyle='#60a5fa';
       ctx.font='14px system-ui';
       ctx.fillText('נטען חלק 1...', canvas.width/2, canvas.height/2 + 120);
-      
+     
     } else if(stage==='path'){
       // Display path learning image with animated plane and side timer
       if(pathImgReady && pathImg){
         const sw=pathImg.width, sh=pathImg.height, dw=canvas.width, dh=canvas.height;
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
         const ox=(dw-w)/2, oy=(dh-h)/2;
-        
+       
         // Draw the path image
         ctx.drawImage(pathImg, ox, oy, w, h);
 
@@ -809,12 +820,12 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         if(isAdminMode()){
           drawCorridorBand(ctx, ox, oy, w, h, { alpha: 0.85 });
         }
-        
+       
         // Draw start and end markers
         if(pathPoints && pathPoints.length > 0){
           const startP = pathPoints[0];
           const endP = pathPoints[pathPoints.length - 1];
-          
+         
           // Start marker (green)
           ctx.beginPath();
           ctx.arc(ox + startP.x * w, oy + startP.y * h, 12, 0, Math.PI * 2);
@@ -823,7 +834,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           ctx.lineWidth = 3;
           ctx.strokeStyle = '#ffffff';
           ctx.stroke();
-          
+         
           // End marker (red)
           if(endP !== startP){
             ctx.beginPath();
@@ -835,7 +846,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
             ctx.stroke();
           }
         }
-        
+       
         // Check timer and auto-advance
         const elapsed = (Date.now() - pathStartTime) / 1000;
         const remaining = Math.max(0, pathDisplaySec - elapsed);
@@ -845,7 +856,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         setStageMessage(practiceActive
           ? 'תרגל את המסלול – אל תיגע במקלדת בזמן הלמידה.'
           : 'למד את המסלול – אל תבצע פעולות עד לסיום הספירה.');
-        
+       
         // Animated plane demonstration
         if(pathPoints && pathPoints.length > 1 && pathTotalLen > 0){
           const totalDuration = Math.max(pathDisplaySec, 1);
@@ -883,7 +894,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
             }
           }
         }
-        
+       
         if(remaining <= 0){
           console.log('[flightexam] PATH time expired, moving to preflight');
           stage = 'preflight';
@@ -891,22 +902,22 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         }
       } else {
         // Loading path image
-        ctx.fillStyle='#ffffff'; 
-        ctx.font='22px system-ui'; 
+        ctx.fillStyle='#ffffff';
+        ctx.font='22px system-ui';
         ctx.textAlign='center';
         ctx.fillText('טוען תמונת מסלול...', canvas.width/2, canvas.height/2);
-        
-        ctx.save(); 
-        ctx.translate(canvas.width/2, canvas.height/2 + 50); 
-        ctx.rotate((Date.now() % 2000) / 2000 * Math.PI * 2); 
-        ctx.strokeStyle='#3b82f6'; 
-        ctx.lineWidth=6; 
-        ctx.beginPath(); 
-        ctx.arc(0, 0, 30, 0, Math.PI * 1.5); 
-        ctx.stroke(); 
+       
+        ctx.save();
+        ctx.translate(canvas.width/2, canvas.height/2 + 50);
+        ctx.rotate((Date.now() % 2000) / 2000 * Math.PI * 2);
+        ctx.strokeStyle='#3b82f6';
+        ctx.lineWidth=6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, 0, Math.PI * 1.5);
+        ctx.stroke();
         ctx.restore();
       }
-      
+     
     } else if(stage==='preflight'){
       // Pre-flight countdown - show map and plane with overlay message
       const elapsed = (Date.now() - preFlightStartTime) / 1000;
@@ -916,23 +927,23 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       setStageMessage(practiceActive
         ? 'ספירת התחלה לתרגול – הכן את הידיים על החיצים ורווח.'
         : 'ספירת התחלה למבחן – הכן את הידיים על החיצים ורווח.');
-      
+     
       // Draw the path image as background
       if(pathImgReady && pathImg){
         const sw=pathImg.width, sh=pathImg.height, dw=canvas.width, dh=canvas.height;
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
         const ox=(dw-w)/2, oy=(dh-h)/2;
-        
+       
         // Draw the path image
         ctx.drawImage(pathImg, ox, oy, w, h);
-        
+       
         // Draw start and end markers
         if(pathPoints && pathPoints.length > 0){
           const startP = pathPoints[0];
           const endP = pathPoints[pathPoints.length - 1];
-          
+         
           // Start marker (green)
           ctx.beginPath();
           ctx.arc(ox + startP.x * w, oy + startP.y * h, 12, 0, Math.PI * 2);
@@ -941,7 +952,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           ctx.lineWidth = 3;
           ctx.strokeStyle = '#ffffff';
           ctx.stroke();
-          
+         
           // End marker (red)
           if(endP !== startP){
             ctx.beginPath();
@@ -953,7 +964,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
             ctx.stroke();
           }
         }
-        
+       
         // Draw the complete trail from learning stage
         if(pathAnimTrail.length > 1){
           ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
@@ -970,7 +981,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           ctx.stroke();
           ctx.shadowBlur = 0;
         }
-        
+       
         // Draw the plane at end position
         if(pathPoints && pathPoints.length > 1){
           const lastPoint = pathPoints[pathPoints.length - 1];
@@ -980,32 +991,32 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           drawPlane(ctx, ox + lastPoint.x * w, oy + lastPoint.y * h, planeSize, preflightHeading);
         }
       }
-      
+     
       // Semi-transparent overlay for countdown message
       ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
       ctx.fillRect(0, canvas.height/2 - 150, canvas.width, 300);
-      
+     
       // Title
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 32px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText('התכונן לטיסה!', canvas.width/2, canvas.height/2 - 80);
-      
+     
       // Instructions
       ctx.fillStyle = '#94a3b8';
       ctx.font = '18px system-ui';
       ctx.fillText('המבחן עומד להתחיל בעוד:', canvas.width/2, canvas.height/2 - 30);
-      
+     
       // Countdown timer - large and prominent
       ctx.fillStyle = '#3b82f6';
       ctx.font = 'bold 72px system-ui';
       ctx.fillText(Math.ceil(remaining).toString(), canvas.width/2, canvas.height/2 + 30);
-      
+     
       // Control instructions
       ctx.fillStyle = '#cbd5e1';
       ctx.font = '16px system-ui';
       ctx.fillText('חץ שמאל/ימין = סיבוב | רווח = תנועה קדימה', canvas.width/2, canvas.height/2 + 100);
-      
+     
       if(remaining <= 0){
         console.log('[flightexam] PREFLIGHT time expired, waiting for start');
         stage = 'waiting_for_start';
@@ -1015,23 +1026,23 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       // Draw test image (flight view)
       if(testImgReady){
         const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height;
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
-        const ox=(dw-w)/2, oy=(dh-h)/2; 
+        const ox=(dw-w)/2, oy=(dh-h)/2;
         ctx.drawImage(testImg,ox,oy,w,h);
-        
+       
         // Draw start/end markers
         if(pathPoints && pathPoints.length){
-          const startP=pathPoints[0]; 
+          const startP=pathPoints[0];
           const endP=pathPoints[pathPoints.length-1];
-          if(startP){ 
-            const sx=ox+startP.x*w, sy=oy+startP.y*h; 
-            ctx.beginPath(); ctx.arc(sx,sy,10,0,Math.PI*2); ctx.fillStyle='#10b981'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke(); 
+          if(startP){
+            const sx=ox+startP.x*w, sy=oy+startP.y*h;
+            ctx.beginPath(); ctx.arc(sx,sy,10,0,Math.PI*2); ctx.fillStyle='#10b981'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke();
           }
-          if(endP && endP!==startP){ 
-            const ex=ox+endP.x*w, ey=oy+endP.y*h; 
-            ctx.beginPath(); ctx.arc(ex,ey,10,0,Math.PI*2); ctx.fillStyle='#ef4444'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke(); 
+          if(endP && endP!==startP){
+            const ex=ox+endP.x*w, ey=oy+endP.y*h;
+            ctx.beginPath(); ctx.arc(ex,ey,10,0,Math.PI*2); ctx.fillStyle='#ef4444'; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle='#ffffff'; ctx.stroke();
           }
         }
 
@@ -1057,26 +1068,26 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       }
     } else if(stage==='flight'){
       const now=performance.now();
-      let dt=0; 
-      if(lastFrameTime){ dt=(now-lastFrameTime)/1000; } 
+      let dt=0;
+      if(lastFrameTime){ dt=(now-lastFrameTime)/1000; }
       lastFrameTime=now;
-      
-      if(keyState.ArrowLeft){ 
-        rotHoldLeft += dt; 
-        const rotSpeed = ROT_SPEED_BASE + (ROT_SPEED_MAX-ROT_SPEED_BASE)*Math.min(1, rotHoldLeft/ROT_ACCEL_TIME); 
-        planeHeading -= rotSpeed*dt; 
-      } else { 
-        rotHoldLeft = 0; 
+     
+      if(keyState.ArrowLeft){
+        rotHoldLeft += dt;
+        const rotSpeed = ROT_SPEED_BASE + (ROT_SPEED_MAX-ROT_SPEED_BASE)*Math.min(1, rotHoldLeft/ROT_ACCEL_TIME);
+        planeHeading -= rotSpeed*dt;
+      } else {
+        rotHoldLeft = 0;
       }
-      
-      if(keyState.ArrowRight){ 
-        rotHoldRight += dt; 
-        const rotSpeed = ROT_SPEED_BASE + (ROT_SPEED_MAX-ROT_SPEED_BASE)*Math.min(1, rotHoldRight/ROT_ACCEL_TIME); 
-        planeHeading += rotSpeed*dt; 
-      } else { 
-        rotHoldRight = 0; 
+     
+      if(keyState.ArrowRight){
+        rotHoldRight += dt;
+        const rotSpeed = ROT_SPEED_BASE + (ROT_SPEED_MAX-ROT_SPEED_BASE)*Math.min(1, rotHoldRight/ROT_ACCEL_TIME);
+        planeHeading += rotSpeed*dt;
+      } else {
+        rotHoldRight = 0;
       }
-      
+     
       if(slowActive){
         const moveSpeed = FORWARD_SPEED;
         planeNX += Math.cos(planeHeading) * moveSpeed * dt;
@@ -1084,10 +1095,10 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         planeNX = Math.max(0, Math.min(1, planeNX));
         planeNY = Math.max(0, Math.min(1, planeNY));
       }
-      
+     
       if(stage==='flight' && pathPoints && pathPoints.length>1){
         const endP = pathPoints[pathPoints.length-1];
-        const dx = planeNX - endP.x; 
+        const dx = planeNX - endP.x;
         const dy = planeNY - endP.y;
         // Increased hit area for end point (3x radius)
         const hitRadius = END_REACH_RADIUS * 3;
@@ -1095,7 +1106,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           finish();
         }
       }
-      
+     
       sampleAccum += dt;
       if(sampleAccum>=0.1){
         sampleAccum=0;
@@ -1108,53 +1119,53 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
         const raw = computeFlightExamRaw(userTrack, corridorHalfWidth, corridorPenaltyWidth);
         score = raw;
       }
-      
+     
       if(testImgReady){
         const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height;
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
-        const ox=(dw-w)/2, oy=(dh-h)/2; 
+        const ox=(dw-w)/2, oy=(dh-h)/2;
         lastDrawBox={ox,oy,w,h};
         ctx.drawImage(testImg,ox,oy,w,h);
-        
+       
         const x=ox+planeNX*w, y=oy+planeNY*h;
         const planeSize = computePlaneSize(canvas.width, canvas.height);
         drawPlane(ctx, x, y, planeSize, planeHeading);
       }
-      
+     
       if(testImgReady && pathPoints && pathPoints.length){
-        const startP=pathPoints[0]; 
+        const startP=pathPoints[0];
         const endP=pathPoints[pathPoints.length-1];
-        const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height; 
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height;
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
         const ox=(dw-w)/2, oy=(dh-h)/2;
-        
-        if(startP){ 
-          const sx=ox+startP.x*w, sy=oy+startP.y*h; 
-          ctx.beginPath(); 
-          ctx.arc(sx,sy,10,0,Math.PI*2); 
-          ctx.fillStyle='#10b981'; 
-          ctx.fill(); 
-          ctx.lineWidth=3; 
-          ctx.strokeStyle='#ffffff'; 
-          ctx.stroke(); 
+       
+        if(startP){
+          const sx=ox+startP.x*w, sy=oy+startP.y*h;
+          ctx.beginPath();
+          ctx.arc(sx,sy,10,0,Math.PI*2);
+          ctx.fillStyle='#10b981';
+          ctx.fill();
+          ctx.lineWidth=3;
+          ctx.strokeStyle='#ffffff';
+          ctx.stroke();
         }
-        if(endP && endP!==startP){ 
-          const ex=ox+endP.x*w, ey=oy+endP.y*h; 
-          ctx.beginPath(); 
-          ctx.arc(ex,ey,10,0,Math.PI*2); 
-          ctx.fillStyle='#ef4444'; 
-          ctx.fill(); 
-          ctx.lineWidth=3; 
-          ctx.strokeStyle='#ffffff'; 
-          ctx.stroke(); 
+        if(endP && endP!==startP){
+          const ex=ox+endP.x*w, ey=oy+endP.y*h;
+          ctx.beginPath();
+          ctx.arc(ex,ey,10,0,Math.PI*2);
+          ctx.fillStyle='#ef4444';
+          ctx.fill();
+          ctx.lineWidth=3;
+          ctx.strokeStyle='#ffffff';
+          ctx.stroke();
         }
       }
-      
-      const elapsed=(Date.now()-flightStartTime)/1000; 
+     
+      const elapsed=(Date.now()-flightStartTime)/1000;
       const remain=Math.max(0,durationFlightSec-elapsed);
       hudUsed = true;
       showHud('זמן טיסה', remain, 'exam');
@@ -1178,21 +1189,21 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       setStageMessage(practiceActive
         ? 'סקירת תרגול – כחול: מסלול מקורי, לבן: הנתיב שלך. לחץ Enter להמשך.'
         : 'סקירת מבחן – כחול: מסלול מקורי, לבן: הנתיב שלך. לחץ Enter להמשך.');
-      
+     
       if(testImgReady && testImg && pathImgReady && pathImg){
         const sw=testImg.width, sh=testImg.height, dw=canvas.width, dh=canvas.height;
-        const sr=sw/sh, dr=dw/dh; 
-        let w,h; 
+        const sr=sw/sh, dr=dw/dh;
+        let w,h;
         if(sr>dr){ w=dw; h=w/sr; } else { h=dh; w=h*sr; }
         const ox=(dw-w)/2, oy=(dh-h)/2;
-        
+       
         // Draw test image as background
         ctx.drawImage(testImg, ox, oy, w, h);
 
         if(isAdminMode()){
           drawCorridorBand(ctx, ox, oy, w, h, { alpha: 0.35, showCenterline: false });
         }
-        
+       
         // Draw original path in blue
         if(pathPoints && pathPoints.length > 1){
           ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
@@ -1206,7 +1217,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           }
           ctx.stroke();
         }
-        
+       
         // Draw user path in green
         const userPath = allTracks[currentPart] || userTrack;
         if(userPath && userPath.length > 1){
@@ -1221,12 +1232,12 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           }
           ctx.stroke();
         }
-        
+       
         // Start/End markers
         if(pathPoints && pathPoints.length){
           const startP = pathPoints[0];
           const endP = pathPoints[pathPoints.length - 1];
-          
+         
           ctx.beginPath();
           ctx.arc(ox + startP.x * w, oy + startP.y * h, 12, 0, Math.PI * 2);
           ctx.fillStyle = '#10b981';
@@ -1234,7 +1245,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
           ctx.lineWidth = 3;
           ctx.strokeStyle = '#ffffff';
           ctx.stroke();
-          
+         
           if(endP !== startP){
             ctx.beginPath();
             ctx.arc(ox + endP.x * w, oy + endP.y * h, 12, 0, Math.PI * 2);
@@ -1245,25 +1256,25 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
             ctx.stroke();
           }
         }
-        
+       
         // Use HTML header/footer instead of drawing on canvas
         const storedScore = partScores[currentPart];
         const partScore = typeof storedScore === 'number'? storedScore : score;
         const practiceReview = isPracticePart(currentPart);
         const adminView = isAdminMode();
-        
+       
         // Calculate remaining time
         const elapsed = (Date.now() - reviewStartTime) / 1000;
         const holdDuration = practiceReview ? Math.max(30, REVIEW_AUTO_SEC) : REVIEW_AUTO_SEC;
         const remaining = Math.max(0, holdDuration - elapsed);
-        
+       
         // Build title with optional score for admin
         let title = practiceReview ? 'השוואת מסלול תרגול' : 'השוואת מסלול';
         if(adminView){
           const label = practiceReview ? 'דיוק תרגול: ' : 'דיוק: ';
           title += ` | ${label}${partScore.toFixed(1)}%`;
         }
-        
+       
         // Build footer text
         let footerText = '';
         if(practiceReview){
@@ -1285,7 +1296,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
             finalizeReview();
           }
         }
-        
+       
         // Update HTML UI
         showReviewUI(true, { title, footerText });
       } else {
@@ -1306,12 +1317,12 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function startTimer(){
     timerId = setInterval(()=>{
       if(stage==='flight'){
-        const elapsed=(Date.now()-flightStartTime)/1000; 
+        const elapsed=(Date.now()-flightStartTime)/1000;
         const remaining=Math.max(0,durationFlightSec-elapsed);
-        const timeEl=document.getElementById('flightexam-time'); 
+        const timeEl=document.getElementById('flightexam-time');
         if(timeEl) timeEl.textContent='טיסה '+remaining.toFixed(1)+'s';
-        const scoreEl=document.getElementById('flightexam-score'); 
-        if(scoreEl && !(window.testAuth && !window.testAuth.isAdmin())) 
+        const scoreEl=document.getElementById('flightexam-score');
+        if(scoreEl && !(window.testAuth && !window.testAuth.isAdmin()))
           scoreEl.textContent=score.toFixed(1);
         if(remaining<=0){ finish(); }
       }
@@ -1321,20 +1332,20 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
   function finish(){
     if(stage==='review') return;
     const practicePart = isPracticePart(currentPart);
-    if(pathPoints && pathPoints.length){ 
+    if(pathPoints && pathPoints.length){
       const projection = projectOnCurrentPath(planeNX, planeNY);
       const dFinal = projection.distance;
       const outside = Math.max(0, dFinal - corridorHalfWidth);
       const ratio = corridorPenaltyWidth > corridorHalfWidth ? Math.min(1, outside / (corridorPenaltyWidth - corridorHalfWidth)) : (outside > 0 ? 1 : 0);
-      userTrack.push({x:planeNX,y:planeNY,d:dFinal,outside,ratio,progress:projection.progress}); 
+      userTrack.push({x:planeNX,y:planeNY,d:dFinal,outside,ratio,progress:projection.progress});
     }
-    
+   
     const partScore = computeFlightExamRaw(userTrack, corridorHalfWidth, corridorPenaltyWidth);
-    partScores[currentPart]=practicePart? null : partScore; 
+    partScores[currentPart]=practicePart? null : partScore;
     allTracks[currentPart]=userTrack.slice();
-    score=partScore; 
-    stage='review'; 
-    reviewStartTime=Date.now(); 
+    score=partScore;
+    stage='review';
+    reviewStartTime=Date.now();
     reviewActive=true;
     warmNextPart(partsRef, currentPart);
   }
@@ -1347,7 +1358,7 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
     const nextPartIndex = currentPart + 1;
     const nextPart = partsRef[nextPartIndex];
     const nextIsPractice = nextPart && nextPart.isPractice;
-    
+   
     if(currentIsPractice && nextIsPractice){
       // Practice -> Practice: Continue automatically with short delay
       setStageMessage('חלק תרגול הושלם. עובר לחלק הבא...');
@@ -1376,33 +1387,33 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       loadPart(currentPart);
       return;
     }
-    
-    active=false; 
+   
+    active=false;
     clearInterval(timerId);
     hideHud();
     showReviewUI(false); // Hide review UI when exam ends
     if(window.practiceBanner) window.practiceBanner.hide();
     setStageMessage('מבחן הטסה הסתיים.');
-    
-    let finalScore=0; 
-    let n=0; 
-    partScores.forEach(ps=>{ 
-      if(typeof ps==='number'){ 
-        finalScore+=ps; 
-        n++; 
-      } 
+   
+    let finalScore=0;
+    let n=0;
+    partScores.forEach(ps=>{
+      if(typeof ps==='number'){
+        finalScore+=ps;
+        n++;
+      }
     });
     if(n>0){ finalScore/=n; }
-    
+   
     score=finalScore;
     const g=window.getGlobalScale? window.getGlobalScale(): {min:1,max:7};
     const scaled=scaleFlightExam(score, g);
-    
-    if(window.testsCore){ 
-      window.testsCore.completeTest('flightexam', score, scaled, {parts:partScores.length}); 
+   
+    if(window.testsCore){
+      window.testsCore.completeTest('flightexam', score, scaled, {parts:partScores.length});
     }
-    if(window.testAuth){ 
-      window.testAuth.showTestCompleteModal('flightexam', scaled.toFixed(2)); 
+    if(window.testAuth){
+      window.testAuth.showTestCompleteModal('flightexam', scaled.toFixed(2));
     }
     if(window.exitFullscreenMode) window.exitFullscreenMode();
   }
@@ -1411,37 +1422,38 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
 
   document.addEventListener('keydown', e=>{
     if(stage!=='flight' && stage!=='review' && stage!=='waiting_for_start') return;
-    if(stage==='review' && e.code==='Enter'){ 
-      e.preventDefault(); 
-      finalizeReview(); 
-      return; 
+    if(stage==='review' && e.code==='Enter'){
+      e.preventDefault();
+      finalizeReview();
+      return;
     }
     if(stage==='flight' || stage==='waiting_for_start'){
-      if(e.code==='ArrowLeft'){ 
-        keyState.ArrowLeft=true; 
-        e.preventDefault(); 
-      } else if(e.code==='ArrowRight'){ 
-        keyState.ArrowRight=true; 
-        e.preventDefault(); 
-      } else if(e.code==='Space'){ 
-        slowActive=true; 
-        e.preventDefault(); 
+      if(e.code==='ArrowLeft'){
+        keyState.ArrowLeft=true;
+        e.preventDefault();
+      } else if(e.code==='ArrowRight'){
+        keyState.ArrowRight=true;
+        e.preventDefault();
+      } else if(e.code==='Space'){
+        slowActive=true;
+        e.preventDefault();
       }
     }
   });
-  
+ 
   document.addEventListener('keyup', e=>{
-    if(e.code==='ArrowLeft'){ 
-      keyState.ArrowLeft=false; 
-    } else if(e.code==='ArrowRight'){ 
-      keyState.ArrowRight=false; 
-    } else if(e.code==='Space'){ 
-      slowActive=false; 
+    if(e.code==='ArrowLeft'){
+      keyState.ArrowLeft=false;
+    } else if(e.code==='ArrowRight'){
+      keyState.ArrowRight=false;
+    } else if(e.code==='Space'){
+      slowActive=false;
     }
   });
 
-  document.addEventListener('DOMContentLoaded',()=>{ 
-    if(window.testsCore) 
-      window.testsCore.registerTest('flightexam',{title:'מבחן טיסה'}); 
+  document.addEventListener('DOMContentLoaded',()=>{
+    if(window.testsCore)
+      window.testsCore.registerTest('flightexam',{title:'מבחן טיסה'});
   });
 })();
+
