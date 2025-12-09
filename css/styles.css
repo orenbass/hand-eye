@@ -1,3 +1,4 @@
+
 /* ===== RESET & BASE ===== */
 * {
     margin: 0;
@@ -616,42 +617,42 @@ header h1 {
 }
 
 /* ===== OVERRIDES: Reaction Screen Absolute Center ===== */
-#reaction-screen .test-view { 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: flex-start; 
-    min-height: 100vh; 
+#reaction-screen .test-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
     padding: 0 !important; /* Removed large padding */
     overflow: hidden;
 }
-#reaction-screen .test-area { 
-    max-width: none !important; 
-    width: 100%; 
-    margin: 0 !important; 
-    padding: 0 !important; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
+#reaction-screen .test-area {
+    max-width: none !important;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex: 1;
 }
-#reaction-screen .reaction-layout-wrapper { 
-    width: 100%; 
-    height: 100vh; 
-    display: flex; 
-    flex-direction: column; 
+#reaction-screen .reaction-layout-wrapper {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
 }
-#reaction-screen #reaction-area { 
-    margin: 0 auto !important; 
+#reaction-screen #reaction-area {
+    margin: 0 auto !important;
 }
-#reaction-screen .pretest-actions { 
-    margin-top: 0 !important; 
-    margin-bottom: 12px; 
+#reaction-screen .pretest-actions {
+    margin-top: 0 !important;
+    margin-bottom: 12px;
 }
 
 /* FINAL CENTER FIX FOR REACTION TEST */
-#reaction-screen .reaction-area { 
-    margin: 0 auto !important; 
+#reaction-screen .reaction-area {
+    margin: 0 auto !important;
     /* Ensure it fits within the flex container */
     max-width: 90vw;
     max-height: 70vh;
@@ -716,7 +717,7 @@ header h1 {
     border: none;
     transform: translate(-50%, -50%);
     cursor: pointer;
-    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
                 filter 0.2s ease,
                 box-shadow 0.2s ease;
     display: flex;
@@ -726,13 +727,13 @@ header h1 {
     font-size: 2rem;
     font-weight: 800;
     text-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    
+   
     /* High quality rendering fixes */
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 5px rgba(255,255,255,0.15), /* Smooth inner border */
         inset 0 10px 20px rgba(255,255,255,0.25), /* Top highlight */
         0 15px 35px rgba(0,0,0,0.2); /* Drop shadow */
-        
+       
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
     transform-style: preserve-3d;
@@ -754,9 +755,9 @@ header h1 {
     transform: translate(-50%, -50%) scale(1.2);
     filter: brightness(1.4) saturate(1.3);
     /* Glowing effect using box-shadow */
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 4px rgba(255,255,255,0.6),
-        0 0 40px currentColor, 
+        0 0 40px currentColor,
         0 0 80px currentColor,
         0 0 120px currentColor;
     z-index: 10;
@@ -767,9 +768,9 @@ header h1 {
 .memory-node.pressed {
     transform: translate(-50%, -50%) scale(1.25);
     filter: brightness(1.5) saturate(1.4);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 6px rgba(255,255,255,0.8),
-        0 0 50px currentColor, 
+        0 0 50px currentColor,
         0 0 100px currentColor,
         0 0 150px currentColor;
     z-index: 15;
@@ -792,9 +793,9 @@ header h1 {
 .memory-node.error {
     transform: translate(-50%, -50%) scale(1.15);
     filter: brightness(0.8) saturate(0.5);
-    box-shadow: 
+    box-shadow:
         inset 0 0 0 6px rgba(239, 68, 68, 0.8),
-        0 0 40px #ef4444, 
+        0 0 40px #ef4444,
         0 0 80px #ef4444;
     animation: memory-error-shake 0.4s ease-out;
 }
@@ -1769,19 +1770,19 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     header {
         padding: 60px 20px 30px 20px;
     }
-    
+   
     .header-actions {
         top: 10px;
         left: 10px;
         gap: 6px;
     }
-    
+   
     .header-actions button {
         width: 38px;
         height: 38px;
         font-size: 1.1rem;
     }
-    
+   
     header h1 {
         font-size: 1.8rem;
     }
@@ -1997,14 +1998,14 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     height: 100%;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     display: flex;
-    align-items: center;
-    justify-content: center;
+    overflow-y: auto;
     z-index: 9999;
 }
 
 .login-container {
     text-align: center;
     padding: 20px;
+    margin: auto;
 }
 
 .login-container h1 {
@@ -3158,11 +3159,11 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
     .orientation-images {
         grid-template-columns: 1fr;
     }
-    
+   
     .orientation-choices {
         grid-template-columns: 1fr;
     }
-    
+   
     .image-panel img {
         max-height: 300px;
     }
@@ -3470,10 +3471,10 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
 .mouse-target.top-right { top: 30px; right: 30px; }
 .mouse-target.bottom-left { bottom: 30px; left: 30px; }
 .mouse-target.bottom-right { bottom: 30px; right: 30px; }
-.mouse-target.center { 
-    top: 50%; 
-    left: 50%; 
-    transform: translate(-50%, -50%); 
+.mouse-target.center {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 .mouse-target.center:hover {
     transform: translate(-50%, -50%) scale(1.3);
@@ -3818,19 +3819,19 @@ body.dark-mode .form-group input[type="datetime-local"]::-webkit-calendar-picker
         padding: 25px 20px;
         border-radius: 12px;
     }
-    
+   
     .feedback-question h3 {
         font-size: 1.1rem;
     }
-    
+   
     .feedback-option {
         padding: 14px 16px;
     }
-    
+   
     .feedback-nav {
         flex-direction: column-reverse;
     }
-    
+   
     .feedback-btn {
         width: 100%;
     }
