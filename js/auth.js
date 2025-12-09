@@ -7,7 +7,7 @@
     let completedTests = new Set();
     let testScores = []; // {id, score}
     let attemptCounts = {}; // testId -> attempts
-    
+   
     let testOrder = []; // סדר דינמי ייקבע מההגדרות
     let previewState = {
         active: false,
@@ -84,7 +84,7 @@
         previewState.testId = null;
         previewState.returnTest = 'admin';
         previewState.reopenSettings = false;
-        
+       
         // נקה localStorage כדי למנוע מצב לא עקבי
         localStorage.removeItem('currentUser');
         localStorage.removeItem('currentUserUuid');
@@ -133,7 +133,7 @@
         }
         return '';
     }
-    
+   
     async function login(id, pin) {
         const trimmed = (id || '').trim();
         const trimmedPin = (pin || '').trim();
@@ -180,13 +180,13 @@
             refreshTestOrder();
             return true;
         }
-        
+       
         // חיפוש משתמש לפי שילוב תעודת זהות + קוד כניסה (תומך במספר רישומים לאותה ת.ז.)
         let record = null;
         if(typeof service.fetchUserByCredentials === 'function'){
             record = await service.fetchUserByCredentials(trimmed, trimmedPin);
         }
-        
+       
         if(!record){
             // בדוק אם תעודת הזהות קיימת בכלל (לצורך הודעת שגיאה מתאימה)
             const anyUser = await service.fetchUserByIdentifier(trimmed);
@@ -196,7 +196,7 @@
                 throw new Error('המשתמש לא נמצא במערכת');
             }
         }
-        
+       
         const windowStart = record.access_window_start ? new Date(record.access_window_start) : null;
         const windowEnd = record.access_window_end ? new Date(record.access_window_end) : null;
         const startMs = windowStart && !Number.isNaN(windowStart.getTime()) ? windowStart.getTime() : null;
@@ -213,7 +213,7 @@
         if(record.all_tests_done === true){
             throw new Error('סיימת כבר את כל המבחנים עם קוד זה. לקבלת קוד חדש פנה למנהל.');
         }
-        
+       
         const fullName = [record.first_name, record.last_name].filter(Boolean).join(' ').trim();
         currentUser = record.national_id || trimmed;
         currentUserUuid = record.id || null;
@@ -226,7 +226,7 @@
         completedTests = new Set();
         attemptCounts = {};
         testScores = [];
-        
+       
         // טען הגדרות המבחנים מהדאטא בייס
         let requiredTests = [];
         if(service && typeof service.fetchActiveSettings === 'function'){
@@ -235,7 +235,7 @@
             if(remoteSettings && remoteSettings.payload){
               const payload = remoteSettings.payload;
               let remoteTestsConfig = null;
-              
+             
               // תמיכה ב-2 פורמטים: settings.tests או testsLayout.tests
               if(payload.settings && Array.isArray(payload.settings.tests)){
                 remoteTestsConfig = payload.settings;
@@ -251,13 +251,13 @@
                 };
                 console.log('[auth] Using payload.testsLayout format');
               }
-              
+             
               if(remoteTestsConfig && Array.isArray(remoteTestsConfig.tests)){
                 requiredTests = remoteTestsConfig.tests
                   .filter(t => t.include !== false)
                   .map(t => t.id);
                 console.log('[auth] Loaded required tests from database:', requiredTests);
-                
+               
                 // מיזוג עם הגדרות קיימות (שמור הגדרות ספציפיות כמו seconds, difficulty)
                 if(!window.appSettings) window.appSettings = {};
                 if(Array.isArray(window.appSettings.tests)){
@@ -282,14 +282,14 @@
                 } else {
                   window.appSettings.tests = remoteTestsConfig.tests;
                 }
-                
+               
                 // שמור גם ב-localStorage
                 localStorage.setItem('app.settings.v1', JSON.stringify(window.appSettings));
                 localStorage.setItem('requiredTests', JSON.stringify(requiredTests));
                 // שלח אירוע עדכון הגדרות כדי שהניווט יתעדכן
                 window.dispatchEvent(new Event('settings-updated'));
                 console.log('[auth] Dispatched settings-updated event');
-                
+               
                 // בנייה מחדש של ה-UI באופן יזום אם הפונקציה קיימת
                 if(typeof window.buildTestSelectorUI === 'function'){
                     console.log('[auth] Calling buildTestSelectorUI explicitly');
@@ -309,7 +309,7 @@
             }
           }
         }
-        
+       
         // קרא את רשימת המבחנים המושלמים מהדאטה בייס
         if(record.tests_completed && Array.isArray(record.tests_completed)){
             record.tests_completed.forEach(testId => {
@@ -317,7 +317,7 @@
             });
             console.log('[auth] Loaded completed tests from database:', [...completedTests]);
         }
-        
+       
         try {
             const attempts = await service.fetchUserAttempts(currentUserUuid);
             attempts.forEach(att=>{
@@ -338,19 +338,19 @@
         updateWelcomeGreeting();
         return true;
     }
-    
+   
     function updateWelcomeGreeting(){
         // עדכן ברכה במסך ההוראות
         const greetingEl = document.getElementById('welcome-greeting');
         if(greetingEl) greetingEl.style.display = 'none'; // הסתרה קבועה לפי בקשת משתמש
-        
+       
         // עדכן ברכה במסך ההקדמה הכללי
         const introGreetingEl = document.getElementById('intro-welcome-greeting');
         const introNameEl = document.getElementById('intro-user-name');
-        
+       
         const shouldShow = currentUserRecord && currentUserRecord.full_name && !currentUserRecord.is_admin;
         const userName = shouldShow ? currentUserRecord.full_name : '';
-        
+       
         // מסך ההקדמה הכללי
         if(introGreetingEl && introNameEl){
             if(shouldShow){
@@ -361,45 +361,48 @@
             }
         }
     }
-    
+   
     function logout() {
         exitPreviewMode();
         resetSessionState(); // זה גם מנקה localStorage
-        
+       
         // שחרר נעילת מבחן אם קיימת
         if(window.examLock) window.examLock.unlock();
-        
+       
         // הסתר ברכת שלום
         const greetingEl = document.getElementById('welcome-greeting');
         if(greetingEl) greetingEl.style.display = 'none';
+
+        // שחזור נראות המסכים (ניקוי inline styles שנקבעו ע"י המשוב)
+        document.querySelectorAll('.screen').forEach(s => s.style.display = '');
     }
-    
+   
     // התחלת שאלון המשוב
     function startFeedbackSurvey() {
         console.log('[auth] Starting feedback survey');
-        
+       
         // שחרר נעילת מבחן כדי לאפשר הקלדה חופשית במשוב
         if(window.examLock && typeof window.examLock.unlock === 'function') {
             console.log('[auth] Unlocking exam for feedback survey');
             window.examLock.unlock();
         }
-        
+       
         // שחרר גם נעילת אינטראקציות אם קיימת
         if(window.testsCore && typeof window.testsCore.unlockAllInteractions === 'function') {
             console.log('[auth] Unlocking all interactions for feedback survey');
             window.testsCore.unlockAllInteractions();
         }
-        
+       
         // הסתר את כל הסקשנים
         document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
         document.querySelector('.container').style.display = 'none';
-        
+       
         // הצג את סקשן המשוב
         const feedbackSection = document.getElementById('feedback-section');
         if (feedbackSection) {
             feedbackSection.style.display = 'block';
         }
-        
+       
         // אתחל את שאלון המשוב
         const userId = localStorage.getItem('currentUserUuid');
         if (window.feedbackSurvey) {
@@ -407,14 +410,14 @@
                 // בסיום המשוב - התנתק
                 logout();
                 showLoginScreen();
-                
+               
                 // הסתר את סקשן המשוב
                 if (feedbackSection) feedbackSection.style.display = 'none';
                 document.querySelector('.container').style.display = 'block';
             });
         }
     }
-    
+   
     function markTestCompleted(testName) {
         if(!testName) return;
         completedTests.add(testName);
@@ -422,7 +425,7 @@
         persistSession();
         updateTestButtons();
     }
-    
+   
     function getNextTest(currentTest) {
         const currentIndex = testOrder.indexOf(currentTest);
         if (currentIndex >= 0 && currentIndex < testOrder.length - 1) {
@@ -430,17 +433,17 @@
         }
         return null;
     }
-    
+   
     function updateTestButtons() {
         refreshTestOrder();
         const buttons = document.querySelectorAll('#test-selector .nav-btn');
         // הסתרת כפתורים שאינם בסדר הנוכחי (אולי נשארו ישנים)
         buttons.forEach(btn=>{ if(!testOrder.includes(btn.dataset.test)) btn.style.display='none'; else btn.style.display=''; });
-        
+       
         // כפתורי מנהל - הצג רק למנהל, הסתר מכולם אחרים
         const adminBtn = document.getElementById('admin-button');
         const scoresBtn = document.getElementById('scores-button');
-        
+       
         if (isAdmin) {
             buttons.forEach(btn => { btn.disabled = false; btn.classList.remove('locked'); });
             if (adminBtn) adminBtn.style.display = 'block';
@@ -448,7 +451,7 @@
             console.log('[auth] updateTestButtons: Admin mode - showing admin controls');
             return;
         }
-        
+       
         // משתמש רגיל - הסתר כפתורי מנהל
         if (adminBtn) adminBtn.style.display = 'none';
         if(scoresBtn) scoresBtn.style.display='none';
@@ -471,39 +474,39 @@
             if (nb) { nb.disabled = false; nb.classList.remove('locked'); }
         }
     }
-    
+   
     function showLoginScreen() {
         const loginScreen = document.getElementById('login-screen');
         const container = document.querySelector('.container');
-        
+       
         if (loginScreen && container) {
             loginScreen.style.display = 'flex';
             container.style.display = 'none';
         }
     }
-    
+   
     function hideLoginScreen() {
         const loginScreen = document.getElementById('login-screen');
         const container = document.querySelector('.container');
-        
+       
         if (loginScreen && container) {
             loginScreen.style.display = 'none';
             container.style.display = 'block';
         }
     }
-    
+   
     function showTestCompleteModal(testName, score) {
         const modal = document.getElementById('test-complete-modal');
         const testNameEl = document.getElementById('modal-test-name');
         const scoreEl = document.getElementById('modal-score-value');
         const nextBtn = document.getElementById('next-test-button');
         const finishBtn = document.getElementById('finish-all-button');
-        
+       
         if (!modal) {
             console.warn('[auth] Modal not found, skipping showTestCompleteModal');
             return;
         }
-        
+       
         // שמות המבחנים בעברית
         const testNames = {
             'eyehand': 'תיאום עין-יד',
@@ -517,7 +520,7 @@
             'orientation': 'התמצאות וכיוונים',
             'flightexam': 'מבחן הטסה'
         };
-        
+       
         if (testNameEl) {
             testNameEl.textContent = testNames[testName] || testName;
         }
@@ -527,11 +530,11 @@
         const nextTest = getNextTest(testName);
         const effectiveAdmin = isEffectiveAdmin();
         const previewActive = isPreviewMode();
-        
+       
         // כפתור המעבר למשוב
         const feedbackBtn = document.getElementById('go-to-feedback-button');
         if (feedbackBtn) feedbackBtn.style.display = 'none';
-        
+       
         if (!effectiveAdmin) {
             // הסתרת תיבת ציון למשתמש רגיל או במצב תצוגה
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='none';
@@ -539,7 +542,7 @@
             if (scoreEl) scoreEl.textContent = score;
             if (scoreEl && scoreEl.parentElement) scoreEl.parentElement.style.display='block';
         }
-        
+       
         if (previewActive) {
             nextBtn.style.display='none';
             finishBtn.style.display='block';
@@ -564,12 +567,12 @@
             nextBtn.onclick=()=>{ modal.style.display='none'; if(window.switchTest) window.switchTest(nextTest); };
         } else {
             // אין מבחן הבא => סיום כל המבחנים - מעבר לשאלון משוב
-            nextBtn.style.display='none'; 
+            nextBtn.style.display='none';
             finishBtn.style.display='none';
-            
+           
             // בדיקה אם המשוב מופעל בהגדרות
             const feedbackEnabledSetting = window.appSettings?.feedbackEnabled !== false;
-            
+           
             if (!effectiveAdmin && feedbackEnabledSetting) {
                 // משתמש רגיל ומשוב מופעל - הצג כפתור מעבר למשוב
                 if (feedbackBtn) {
@@ -587,10 +590,10 @@
                 finishBtn.onclick=()=>{ modal.style.display='none'; alert('כל המבחנים הושלמו!'); };
             }
         }
-        
+       
         modal.style.display='flex';
     }
-    
+   
     function showIntroScreen() {
         const intro = document.getElementById('general-intro-screen');
         if(intro) intro.style.display = 'flex';
@@ -606,7 +609,7 @@
         const idInput = document.getElementById('id-input');
         const pinInput = document.getElementById('pin-input');
         const errorMsg = document.getElementById('login-error');
-        
+       
         // Setup Intro Button
         const introStartBtn = document.getElementById('intro-start-btn');
         if(introStartBtn) {
@@ -621,15 +624,15 @@
                 }
             });
         }
-        
+       
         // Bind the callback for when system check is done
         window.startTestsAfterCheck = () => {
             selectFirstAvailable();
         };
-        
+       
         if (!loginButton || !idInput || !pinInput) return;
         const defaultLabel = loginButton.textContent;
-        
+       
         const handleLogin = async () => {
             const id = idInput.value.trim();
             const pin = pinInput.value.trim();
@@ -659,7 +662,7 @@
                 loginButton.textContent = defaultLabel;
             }
         };
-        
+       
         loginButton.addEventListener('click', handleLogin);
         [idInput, pinInput].forEach(input=>{
             input.addEventListener('keypress', (e) => {
@@ -671,39 +674,39 @@
         // פוקוס אוטומטי
         idInput.focus();
     }
-    
+   
     function setupLogoutButton() {
         const logoutButton = document.getElementById('logout-button');
         if (!logoutButton) {
             console.warn('[auth] logout-button not found');
             return;
         }
-        
+       
         console.log('[auth] Setting up logout button');
-        
+       
         logoutButton.addEventListener('click', (e) => {
             console.log('[auth] Logout button clicked');
             e.preventDefault();
             e.stopPropagation();
-            
+           
             if (confirm('האם אתה בטוח שברצונך לצאת מהמערכת?')) {
                 console.log('[auth] User confirmed logout');
-                logout(); 
+                logout();
                 showLoginScreen();
                 // במקום לכפות eyehand – מנקה מצבים
-                const navButtons = document.querySelectorAll('.nav-btn'); 
+                const navButtons = document.querySelectorAll('.nav-btn');
                 navButtons.forEach(btn => { btn.disabled = true; btn.classList.add('locked'); });
-                const scoresBtn = document.getElementById('scores-button'); 
+                const scoresBtn = document.getElementById('scores-button');
                 if(scoresBtn) scoresBtn.style.display='none';
                 if(window.scoresView && typeof window.scoresView.close === 'function') window.scoresView.close();
-                applyBodyMode(); 
+                applyBodyMode();
                 hideUserStatsIfNeeded();
             } else {
                 console.log('[auth] User cancelled logout');
             }
         });
     }
-    
+   
     function enterPreviewMode(testId, options){
         if(previewState.active) exitPreviewMode();
         const opts = options || {};
@@ -746,24 +749,24 @@
         const savedAdmin = localStorage.getItem('isAdmin') === 'true';
         const savedUuid = localStorage.getItem('currentUserUuid');
         const savedRecordRaw = localStorage.getItem('currentUserRecord');
-        
+       
         if(savedRecordRaw){ try{ currentUserRecord = JSON.parse(savedRecordRaw); }catch(e){ currentUserRecord = null; } }
-        
+       
         if (savedUser) {
             currentUser = savedUser;
             currentUserUuid = savedUuid || null;
             isAdmin = savedAdmin;
-            
+           
             // אם מנהל - פשוט הכנס
             if (isAdmin) {
-                hideLoginScreen(); 
-                refreshTestOrder(); 
-                updateTestButtons(); 
-                hideUserStatsIfNeeded(); 
+                hideLoginScreen();
+                refreshTestOrder();
+                updateTestButtons();
+                hideUserStatsIfNeeded();
                 applyBodyMode();
                 return;
             }
-            
+           
             // אם משתמש רגיל - בדוק מול DB אם יש לו מבחנים שהושלמו
             hideLoginScreen();
             refreshTestOrder();
@@ -771,7 +774,7 @@
             hideUserStatsIfNeeded();
             applyBodyMode();
             updateWelcomeGreeting();
-            
+           
             // תמיד בדוק מול DB - אם אין מבחנים מושלמים, חזור למסך פתיחה
             if(savedUuid){
                 checkUserProgressFromDb(savedUuid).then((hasProgress)=>{
@@ -788,20 +791,20 @@
                 // אין UUID - הצג מסך פתיחה
                 showIntroScreen();
             }
-        } else { 
-            showLoginScreen(); 
+        } else {
+            showLoginScreen();
         }
-        
+       
         setupLoginForm();
         setupLogoutButton();
     }
-    
+   
     // פונקציה לבדיקת התקדמות משתמש מה-DB
     async function checkUserProgressFromDb(userId){
         if(!userId) return false;
         const service = window.examData;
         if(!service) return false;
-        
+       
         // המתן שה-Supabase יהיה מוכן
         const isReady = typeof service.isReady === 'function' ? service.isReady() : true;
         if(!isReady){
@@ -809,17 +812,17 @@
             // נסה להמתין קצת
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        
+       
         try {
             // טען את ה-attempts של המשתמש מהדאטאבייס
             if(typeof service.fetchUserAttempts === 'function'){
                 const attempts = await service.fetchUserAttempts(userId);
-                
+               
                 // נקה מצב קודם
                 completedTests = new Set();
                 attemptCounts = {};
                 testScores = [];
-                
+               
                 attempts.forEach(att=>{
                     if(!att || !att.test_id) return;
                     completedTests.add(att.test_id);
@@ -830,10 +833,10 @@
                     }
                 });
                 console.log('[auth] Loaded from DB - completed tests:', [...completedTests]);
-                
+               
                 // עדכון localStorage (לצורך שמירה זמנית בלבד)
                 persistSession();
-                
+               
                 return completedTests.size > 0;
             }
         } catch(err){
@@ -841,7 +844,7 @@
         }
         return false;
     }
-    
+   
     // חשיפת API גלובלי
     window.testAuth = {
         getCurrentUser: () => currentUser,
@@ -879,7 +882,7 @@
           }
         }
     };
-    
+   
     document.addEventListener('DOMContentLoaded', init);
     window.addEventListener('settings-updated', ()=>{
         // כל שינוי בהגדרות מעדכן סדר מבחנים ונעילות
