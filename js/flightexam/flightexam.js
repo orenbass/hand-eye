@@ -1456,4 +1456,3 @@ import { computePathLength, preloadPart, warmNext as warmNextPart, getPreloadedI
       window.testsCore.registerTest('flightexam',{title:'מבחן טיסה'});
   });
 })();
-
